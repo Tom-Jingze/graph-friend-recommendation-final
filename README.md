@@ -47,4 +47,4 @@ docker run --rm --cpus 2 --memory 6g --mount "type=bind,source=${PWD},target=/ap
 - `PERFORMANCE_V3.md`、`evidence/performance/`：既有20万边性能定位与负收益取舍。
 - `artifacts/`：本机完整计算表、warehouse 与 eventlog，不打入发布 ZIP。
 
-本项目作为大数据项目；机器学习项目独立交付，不把本项目包装成在线模型训练系统。
+
