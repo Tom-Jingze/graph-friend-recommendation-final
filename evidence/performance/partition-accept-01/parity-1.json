@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "candidate_pairs_compared_between_modes": 6639492,
+  "recommendation_rows_compared_between_modes": 3783816,
+  "max_score_error_between_modes": {
+    "common_neighbors": 0.0,
+    "jaccard": 0.0,
+    "adamic_adar": 3.552713678800501e-15,
+    "resource_allocation": 8.881784197001252e-16
+  },
+  "independent_reference_pairs": 1000,
+  "independent_reference_users": 64,
+  "max_reference_score_error": 2.220446049250313e-16,
+  "pair_tolerance": {
+    "atol": 1e-12,
+    "rtol": 1e-12
+  },
+  "topk_tie_policy": "HALF_EVEN score quantized to 12 decimal places, then candidate ID",
+  "validation_scope": "Local pandas loads both result tables and the input graph; score equivalence is full-table, independent Python reference checks are sampled",
+  "first_run": "C:\\Users\\86138\\Documents\\Codex\\2026-11-18\\wo-x-2\\outputs\\graph-friend-recommendation-v3\\artifacts\\partition-benchmark\\runs\\partition-accept-01-1-p16-no-coalesce",
+  "second_run": "C:\\Users\\86138\\Documents\\Codex\\2026-11-18\\wo-x-2\\outputs\\graph-friend-recommendation-v3\\artifacts\\partition-benchmark\\runs\\partition-accept-01-1-p4-default-aqe",
+  "pandas": "2.3.3",
+  "numpy": "1.26.4"
+}

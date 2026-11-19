@@ -1,0 +1,13 @@
+{
+  "container_name": "/graph-final-accept-02",
+  "image_id": "sha256:644bd9759554399419b3403e78562ef51de9c31555bafb4d716b6cfcbc66c231",
+  "nano_cpus": 2000000000,
+  "memory_bytes": 6442450944,
+  "driver_memory": "2g",
+  "spark_master": "local[2]",
+  "source_sha256": {
+    "src\\spark_pipeline.py": "5bb9f66f130b7d70b3f9b0e290ff37de26f1f6be6b20b16e426b19d0c88c85a7",
+    "src\\incremental_pipeline.py": "6d9644c03486679859bd15065026fa7db38a59ab592ae0e803815b6e39691c85",
+    "scripts\\accept_incremental.py": "f87a1662f5cb0d3a0c05b8c2e7361c7f849e79c89f372aa8d5ccdbb93d470489"
+  }
+}

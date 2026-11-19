@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "candidate_pairs_compared_between_modes": 1358067,
+  "recommendation_rows_compared_between_modes": 161536,
+  "max_score_error_between_modes": {
+    "common_neighbors": 0.0,
+    "jaccard": 0.0,
+    "adamic_adar": 0.0,
+    "resource_allocation": 0.0
+  },
+  "independent_reference_pairs": 1000,
+  "independent_reference_users": 64,
+  "max_reference_score_error": 3.552713678800501e-15,
+  "pair_tolerance": {
+    "atol": 1e-12,
+    "rtol": 1e-12
+  },
+  "topk_tie_policy": "HALF_EVEN score quantized to 12 decimal places, then candidate ID",
+  "validation_scope": "Local pandas loads both result tables and the input graph; score equivalence is full-table, independent Python reference checks are sampled",
+  "first_run": "artifacts\\validation\\runs\\facebook-baseline-01",
+  "second_run": "artifacts\\cluster-validation\\runs\\cluster-facebook-01",
+  "pandas": "2.3.3",
+  "numpy": "1.26.4"
+}

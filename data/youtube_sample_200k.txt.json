@@ -1,0 +1,23 @@
+{
+  "source": "C:\\Users\\86138\\Documents\\Codex\\2026-11-18\\wo-x-2\\work\\validation_data\\com-youtube.ungraph.txt.gz",
+  "source_sha256": "dff1b97ba7d2fa9c59884b67dcd2275e717ff9501f86ed82ce6582ed4971f3e0",
+  "sampling": "uniform reservoir of valid edge records; canonicalize and deduplicate sampled records",
+  "seed": 42,
+  "requested_records": 200000,
+  "source_counts": {
+    "source_lines": 2987628,
+    "comment_or_blank": 4,
+    "valid_edge_records": 2987624
+  },
+  "sampled_records": 200000,
+  "unique_edges": 200000,
+  "nodes": 201482,
+  "max_degree": 1945,
+  "two_hop_wedge_records": 6657697,
+  "top10_degree_wedge_fraction": 0.5511114428908375,
+  "sample_sha256": "9808dab3f74fc84344f52e8c9f081cd124ce5634bf4f4974aeaf6fa16ee21c85",
+  "limitations": [
+    "Sampled graph metrics do not estimate full-graph recommendation quality.",
+    "Source is a static graph without real event timestamps."
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "clean_edges": {
+    "format": "parquet",
+    "relative_path": "tables/clean_edges",
+    "path": "file:///workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/runs/facebook-optimized-01/tables/clean_edges",
+    "write_seconds": 4.778270485999997
+  },
+  "quarantine": {
+    "format": "parquet",
+    "relative_path": "tables/quarantine",
+    "path": "file:///workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/runs/facebook-optimized-01/tables/quarantine",
+    "write_seconds": 2.6555239299999585
+  },
+  "adjacency": {
+    "format": "parquet",
+    "relative_path": "tables/adjacency",
+    "path": "file:///workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/runs/facebook-optimized-01/tables/adjacency",
+    "write_seconds": 6.408332137999992
+  },
+  "degree": {
+    "format": "parquet",
+    "relative_path": "tables/degree",
+    "path": "file:///workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/runs/facebook-optimized-01/tables/degree",
+    "write_seconds": 3.4531285369999978
+  },
+  "candidate_scores": {
+    "format": "parquet",
+    "relative_path": "tables/candidate_scores",
+    "path": "file:///workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/runs/facebook-optimized-01/tables/candidate_scores",
+    "write_seconds": 5.007815658000027
+  },
+  "recommendations": {
+    "format": "parquet",
+    "relative_path": "tables/recommendations",
+    "path": "file:///workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/runs/facebook-optimized-01/tables/recommendations",
+    "write_seconds": 4.763436820000038
+  }
+}

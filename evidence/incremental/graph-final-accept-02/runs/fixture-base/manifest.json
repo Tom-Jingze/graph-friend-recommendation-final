@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "status": "success",
+  "run_id": "fixture-base",
+  "completed_at": "2026-11-19T02:09:44.453035+00:00",
+  "input": "/workspace/outputs/graph-friend-recommendation-final/evidence/incremental/graph-final-accept-02/fixture.txt",
+  "mode": "baseline",
+  "k": 10,
+  "max_wedges": 50000000,
+  "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+  "format": "parquet",
+  "tables": {
+    "clean_edges": {
+      "format": "parquet",
+      "relative_path": "tables/clean_edges",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/fixture-base/tables/clean_edges",
+      "write_seconds": 4.443511562999902
+    },
+    "quarantine": {
+      "format": "parquet",
+      "relative_path": "tables/quarantine",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/fixture-base/tables/quarantine",
+      "write_seconds": 2.4272349970000278
+    },
+    "adjacency": {
+      "format": "parquet",
+      "relative_path": "tables/adjacency",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/fixture-base/tables/adjacency",
+      "write_seconds": 6.438668737000057
+    },
+    "degree": {
+      "format": "parquet",
+      "relative_path": "tables/degree",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/fixture-base/tables/degree",
+      "write_seconds": 3.5457194929999787
+    },
+    "candidate_scores": {
+      "format": "parquet",
+      "relative_path": "tables/candidate_scores",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/fixture-base/tables/candidate_scores",
+      "write_seconds": 4.214928777999944
+    },
+    "recommendations": {
+      "format": "parquet",
+      "relative_path": "tables/recommendations",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/fixture-base/tables/recommendations",
+      "write_seconds": 4.974906601999919
+    }
+  },
+  "quality": {
+    "input_rows": 20,
+    "classification_counts": {
+      "ignored": 0,
+      "malformed": 0,
+      "overflow": 0,
+      "negative_id": 0,
+      "self_loop": 0,
+      "valid": 20
+    },
+    "duplicate_valid_rows": 0,
+    "clean_edges": 20,
+    "nodes": 22,
+    "directed_edges": 40,
+    "max_degree": 4,
+    "theoretical_wedges": 22,
+    "quarantined_rows": 0,
+    "input_accounting_passed": true,
+    "adjacency_count_passed": true,
+    "id_policy": "exactly two signed-integer tokens; IDs must fit signed int64 and be nonnegative; self-loops rejected; blank/#comment rows ignored",
+    "wedge_budget": {
+      "max_wedges": 50000000,
+      "passed": true
+    },
+    "candidate_pairs": 22,
+    "recommendation_rows": 176,
+    "result_checks": {
+      "no_existing_edges_in_candidates": true,
+      "candidate_score_invariants": true,
+      "recommendation_row_upper_bound": true
+    }
+  },
+  "timings": {
+    "clean_materialize_and_write_seconds": 24.99639985099998,
+    "score_materialize_and_write_seconds": 7.705884330999993,
+    "topk_materialize_and_write_seconds": 8.832060052999964,
+    "validation_seconds": 1.864520233999997,
+    "pipeline_seconds": 43.42267259699997
+  },
+  "environment": {
+    "python": "3.8.10 (default, Mar 18 2025, 20:04:55) \n[GCC 9.4.0]",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.29",
+    "spark": "3.5.7",
+    "java_version": "11.0.27",
+    "java_vendor": "Eclipse Adoptium",
+    "application_id": "local-1795054140112",
+    "master": "local[2]",
+    "default_parallelism": 2,
+    "shuffle_partitions": 4,
+    "adaptive_enabled": "true",
+    "adaptive_coalesce_enabled": "true",
+    "adaptive_advisory_partition_size": "67108864b",
+    "adaptive_coalesce_parallelism_first": "true",
+    "adaptive_coalesce_min_partition_size": "1048576b",
+    "driver_memory": "2g",
+    "execution_control_requests": {
+      "disable_adaptive_coalesce": false,
+      "adaptive_advisory_partition_bytes": null,
+      "adaptive_coalesce_size_first": false
+    },
+    "storage_level": "MEMORY_AND_DISK",
+    "iceberg_package": null
+  },
+  "event_log_directory": "/workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/event-logs",
+  "execution_parameters": {
+    "shuffle_partitions": 4,
+    "requested_adaptive_settings": {
+      "spark.sql.adaptive.enabled": "true",
+      "spark.sql.adaptive.skewJoin.enabled": "true"
+    },
+    "effective_coalesce_enabled": "true",
+    "effective_advisory_partition_size": "67108864b",
+    "effective_coalesce_parallelism_first": "true"
+  },
+  "publication": {
+    "type": "local_atomic_directory_rename",
+    "manifest_is_visibility_boundary": true,
+    "iceberg_cross_table_transaction": false,
+    "successful_run_is_immutable": true
+  },
+  "limits": [
+    "Exact self-join enumerates O(sum(degree^2)) wedges; extreme-degree hubs can still exhaust resources.",
+    "Optimized mode is a measurable hypothesis; baseline already benefits from Spark partial aggregation.",
+    "No speedup, cluster scalability, online recommendation benefit or temporal accuracy is asserted by this run.",
+    "An OS-killed process can leave a lock; verify the PID is no longer running before manually removing its .locks file."
+  ]
+}

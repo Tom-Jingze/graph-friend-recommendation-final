@@ -1,0 +1,9 @@
+FROM apache/spark:3.5.7-python3
+USER root
+COPY vendor/iceberg-spark-runtime-3.5_2.12-1.10.0.jar /opt/spark/jars/iceberg-spark-runtime-3.5_2.12-1.10.0.jar
+RUN python3 -c "import hashlib,pathlib; p=pathlib.Path('/opt/spark/jars/iceberg-spark-runtime-3.5_2.12-1.10.0.jar'); assert hashlib.sha256(p.read_bytes()).hexdigest() == '70f9471870b2d456167d703c829f098a446b86bb1379eee338c0efa03a341026'; p.chmod(0o644)"
+ENV PYSPARK_PYTHON=python3 PYSPARK_DRIVER_PYTHON=python3
+WORKDIR /app
+USER 185
+ENTRYPOINT []
+CMD ["/opt/spark/bin/spark-submit", "--help"]

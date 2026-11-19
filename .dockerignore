@@ -1,0 +1,5 @@
+**
+!Dockerfile
+!Dockerfile.offline
+!vendor/
+!vendor/iceberg-spark-runtime-3.5_2.12-1.10.0.jar

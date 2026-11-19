@@ -1,0 +1,14 @@
+{
+  "requested_unique_changes": 2,
+  "effective_adds": 1,
+  "effective_deletes": 1,
+  "affected_users": 349,
+  "clean_edges": 88234,
+  "nodes": 4040,
+  "noop_changes": 0,
+  "affected_oriented_wedges_upper_bound": 358599,
+  "recomputed_candidate_pairs": 68391,
+  "retained_candidate_pairs": 1289678,
+  "candidate_pairs": 1358069,
+  "recommendation_rows": 161540
+}

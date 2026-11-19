@@ -1,0 +1,202 @@
+{
+  "status": "PASS",
+  "scope": "single-host Docker, shared Spark local[2] session; not a runtime benchmark",
+  "cases": {
+    "mixed_changes": {
+      "quality": {
+        "requested_unique_changes": 7,
+        "effective_adds": 2,
+        "effective_deletes": 3,
+        "affected_users": 16,
+        "clean_edges": 19,
+        "nodes": 21,
+        "noop_changes": 2,
+        "affected_oriented_wedges_upper_bound": 40,
+        "recomputed_candidate_pairs": 18,
+        "retained_candidate_pairs": 3,
+        "candidate_pairs": 21,
+        "recommendation_rows": 168
+      },
+      "full_parity": {
+        "clean_edges": {
+          "rows": 19,
+          "key_multisets_equal": true,
+          "max_absolute_error": {}
+        },
+        "candidate_scores": {
+          "rows": 21,
+          "key_multisets_equal": true,
+          "max_absolute_error": {
+            "common_neighbors": 0,
+            "jaccard": 0.0,
+            "adamic_adar": 0.0,
+            "resource_allocation": 0.0
+          }
+        },
+        "recommendations": {
+          "rows": 168,
+          "key_multisets_equal": true,
+          "max_absolute_error": {
+            "score": 0.0
+          }
+        }
+      },
+      "independent_reference": {
+        "all_pairs": 21,
+        "max_error": 2.220446049250313e-16,
+        "int64_ids_preserved": true
+      }
+    },
+    "idempotency": {
+      "same_request": "already_published",
+      "different_request": "rejected"
+    },
+    "invalid": "rejected_without_publication",
+    "conflict": "rejected_without_publication",
+    "failure_retry": {
+      "clean_edges": {
+        "rows": 19,
+        "key_multisets_equal": true,
+        "max_absolute_error": {}
+      },
+      "candidate_scores": {
+        "rows": 21,
+        "key_multisets_equal": true,
+        "max_absolute_error": {
+          "common_neighbors": 0,
+          "jaccard": 0.0,
+          "adamic_adar": 0.0,
+          "resource_allocation": 0.0
+        }
+      },
+      "recommendations": {
+        "rows": 168,
+        "key_multisets_equal": true,
+        "max_absolute_error": {
+          "score": 0.0
+        }
+      }
+    },
+    "noop_replay": {
+      "clean_edges": {
+        "rows": 19,
+        "key_multisets_equal": true,
+        "max_absolute_error": {}
+      },
+      "candidate_scores": {
+        "rows": 21,
+        "key_multisets_equal": true,
+        "max_absolute_error": {
+          "common_neighbors": 0,
+          "jaccard": 0.0,
+          "adamic_adar": 0.0,
+          "resource_allocation": 0.0
+        }
+      },
+      "recommendations": {
+        "rows": 168,
+        "key_multisets_equal": true,
+        "max_absolute_error": {
+          "score": 0.0
+        }
+      }
+    },
+    "all_edges_deleted": {
+      "requested_unique_changes": 19,
+      "effective_adds": 0,
+      "effective_deletes": 19,
+      "affected_users": 21,
+      "clean_edges": 0,
+      "nodes": 0,
+      "noop_changes": 0,
+      "affected_oriented_wedges_upper_bound": 0,
+      "recomputed_candidate_pairs": 0,
+      "retained_candidate_pairs": 0,
+      "candidate_pairs": 0,
+      "recommendation_rows": 0
+    },
+    "iceberg_snapshots": {
+      "clean_edges": {
+        "rows": 19,
+        "key_multisets_equal": true,
+        "max_absolute_error": {}
+      },
+      "candidate_scores": {
+        "rows": 21,
+        "key_multisets_equal": true,
+        "max_absolute_error": {
+          "common_neighbors": 0,
+          "jaccard": 0.0,
+          "adamic_adar": 0.0,
+          "resource_allocation": 0.0
+        }
+      },
+      "recommendations": {
+        "rows": 168,
+        "key_multisets_equal": true,
+        "max_absolute_error": {
+          "score": 0.0
+        }
+      },
+      "snapshot_ids": {
+        "clean_edges": 1139437907082092743,
+        "adjacency": 5597194539851506187,
+        "degree": 1579686657833820237,
+        "changes": 6409464575094471257,
+        "effective_adds": 3592416153529389760,
+        "effective_deletes": 3526933487678082628,
+        "affected_users": 1782925007036922792,
+        "candidate_scores": 4957170707651839190,
+        "recommendations": 4545373686754989830
+      }
+    },
+    "facebook_full_graph": {
+      "quality": {
+        "requested_unique_changes": 2,
+        "effective_adds": 1,
+        "effective_deletes": 1,
+        "affected_users": 349,
+        "clean_edges": 88234,
+        "nodes": 4040,
+        "noop_changes": 0,
+        "affected_oriented_wedges_upper_bound": 358599,
+        "recomputed_candidate_pairs": 68391,
+        "retained_candidate_pairs": 1289678,
+        "candidate_pairs": 1358069,
+        "recommendation_rows": 161540
+      },
+      "full_parity": {
+        "clean_edges": {
+          "rows": 88234,
+          "key_multisets_equal": true,
+          "max_absolute_error": {}
+        },
+        "candidate_scores": {
+          "rows": 1358069,
+          "key_multisets_equal": true,
+          "max_absolute_error": {
+            "common_neighbors": 0,
+            "jaccard": 0.0,
+            "adamic_adar": 3.552713678800501e-15,
+            "resource_allocation": 2.220446049250313e-16
+          }
+        },
+        "recommendations": {
+          "rows": 161540,
+          "key_multisets_equal": true,
+          "max_absolute_error": {
+            "score": 3.552713678800501e-15
+          }
+        }
+      },
+      "input_edges": 88234
+    }
+  },
+  "elapsed_seconds": 685.9693725030002,
+  "environment": {
+    "spark": "3.5.7",
+    "application_id": "local-1795054140112",
+    "master": "local[2]",
+    "python": "3.8.10 (default, Mar 18 2025, 20:04:55) \n[GCC 9.4.0]"
+  }
+}

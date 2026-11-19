@@ -1,0 +1,5 @@
+# JVM prerequisite: Java 17. See README for Windows Hadoop native library setup.
+pyspark==3.5.7
+pytest>=8.0,<9.0
+# Iceberg is a JVM runtime, supplied by --iceberg-package (not a Python package):
+# org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0

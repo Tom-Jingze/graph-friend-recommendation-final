@@ -1,0 +1,123 @@
+{
+  "schema_version": 2,
+  "kind": "incremental",
+  "status": "success",
+  "run_id": "iceberg-mixed",
+  "completed_at": "2026-11-19T02:17:27.543228+00:00",
+  "base_run_id": "iceberg-base",
+  "base_run": "/workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/iceberg-base",
+  "request": {
+    "base_manifest_sha256": "6ec4b26098b4afb2c498c2e0b8d52b652062a3a23b1b016a4c60b55eb5adb718",
+    "changes_sha256": "8d5ede7db11ab453f2e8e770e3d5fd35354d18dbb8a718b9ff36681ce7aa2870",
+    "k": 10,
+    "format": "iceberg",
+    "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+    "algorithm": "two-hop-invalidation-v1",
+    "request_sha256": "a19e564b47bcc67e864fefd962f7a56498c119206da79bfa3f0ec93227d6050e"
+  },
+  "k": 10,
+  "format": "iceberg",
+  "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+  "tables": {
+    "clean_edges": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_clean_edges",
+      "snapshot_id": 1139437907082092743,
+      "committed_at": "2026-11-19 02:16:27.441000",
+      "write_seconds": 4.959330278000039
+    },
+    "adjacency": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_adjacency",
+      "snapshot_id": 5597194539851506187,
+      "committed_at": "2026-11-19 02:16:32.459000",
+      "write_seconds": 4.407517012999961
+    },
+    "degree": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_degree",
+      "snapshot_id": 1579686657833820237,
+      "committed_at": "2026-11-19 02:16:37.132000",
+      "write_seconds": 5.280105591000165
+    },
+    "changes": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_changes",
+      "snapshot_id": 6409464575094471257,
+      "committed_at": "2026-11-19 02:16:42.395000",
+      "write_seconds": 4.023381816999972
+    },
+    "effective_adds": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_effective_adds",
+      "snapshot_id": 3592416153529389760,
+      "committed_at": "2026-11-19 02:16:46.422000",
+      "write_seconds": 4.447649545999866
+    },
+    "effective_deletes": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_effective_deletes",
+      "snapshot_id": 3526933487678082628,
+      "committed_at": "2026-11-19 02:16:50.716000",
+      "write_seconds": 3.9043237379999027
+    },
+    "affected_users": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_affected_users",
+      "snapshot_id": 1782925007036922792,
+      "committed_at": "2026-11-19 02:16:54.624000",
+      "write_seconds": 3.739391226999942
+    },
+    "candidate_scores": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_candidate_scores",
+      "snapshot_id": 4957170707651839190,
+      "committed_at": "2026-11-19 02:17:09.138000",
+      "write_seconds": 5.96663410899987
+    },
+    "recommendations": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_mixed_aee4a6b16054_recommendations",
+      "snapshot_id": 4545373686754989830,
+      "committed_at": "2026-11-19 02:17:24.560000",
+      "write_seconds": 7.927431384000101
+    }
+  },
+  "quality": {
+    "requested_unique_changes": 7,
+    "effective_adds": 2,
+    "effective_deletes": 3,
+    "affected_users": 16,
+    "clean_edges": 19,
+    "nodes": 21,
+    "noop_changes": 2,
+    "affected_oriented_wedges_upper_bound": 40,
+    "recomputed_candidate_pairs": 18,
+    "retained_candidate_pairs": 3,
+    "candidate_pairs": 21,
+    "recommendation_rows": 168
+  },
+  "timings": {
+    "graph_seconds": 40.51462851500003,
+    "pipeline_seconds": 70.62406002
+  },
+  "environment": {
+    "spark": "3.5.7",
+    "application_id": "local-1795054140112",
+    "master": "local[2]",
+    "partitions": 4
+  },
+  "event_log_directory": "/workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/event-logs",
+  "publication": {
+    "type": "local_atomic_directory_rename",
+    "manifest_is_visibility_boundary": true,
+    "iceberg_cross_table_transaction": false,
+    "successful_run_is_immutable": true
+  },
+  "limits": [
+    "Static graph change replay, not real historical social events.",
+    "Conservative two-hop invalidation can cover most users for a hub update; no speedup guarantee.",
+    "Complete snapshot tables are rewritten; computation is incremental, physical output I/O is not.",
+    "Iceberg commits are per table; readers must enter through the successful manifest."
+  ]
+}

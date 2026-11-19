@@ -1,0 +1,32 @@
+{
+  "input_rows": 88234,
+  "classification_counts": {
+    "ignored": 0,
+    "malformed": 0,
+    "overflow": 0,
+    "negative_id": 0,
+    "self_loop": 0,
+    "valid": 88234
+  },
+  "duplicate_valid_rows": 0,
+  "clean_edges": 88234,
+  "nodes": 4040,
+  "directed_edges": 176468,
+  "max_degree": 1045,
+  "theoretical_wedges": 9314848,
+  "quarantined_rows": 0,
+  "input_accounting_passed": true,
+  "adjacency_count_passed": true,
+  "id_policy": "exactly two signed-integer tokens; IDs must fit signed int64 and be nonnegative; self-loops rejected; blank/#comment rows ignored",
+  "wedge_budget": {
+    "max_wedges": 50000000,
+    "passed": true
+  },
+  "candidate_pairs": 1358069,
+  "recommendation_rows": 161540,
+  "result_checks": {
+    "no_existing_edges_in_candidates": true,
+    "candidate_score_invariants": true,
+    "recommendation_row_upper_bound": true
+  }
+}

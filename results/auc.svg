@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<text x="40" y="42" font-family="Arial" font-size="25" font-weight="700" fill="#20242A">Held-out edge discrimination</text>
+<text x="40" y="70" font-family="Arial" font-size="14" fill="#616975">Mean hard-negative AUC across 5 splits; negatives share at least one training neighbor</text>
+<line x1="225.0" y1="105" x2="225.0" y2="490" stroke="#E6E8EB"/>
+<text x="225.0" y="518" text-anchor="middle" font-family="Arial" font-size="12" fill="#5D6670">0.000</text>
+<line x1="358.0" y1="105" x2="358.0" y2="490" stroke="#E6E8EB"/>
+<text x="358.0" y="518" text-anchor="middle" font-family="Arial" font-size="12" fill="#5D6670">0.219</text>
+<line x1="491.0" y1="105" x2="491.0" y2="490" stroke="#E6E8EB"/>
+<text x="491.0" y="518" text-anchor="middle" font-family="Arial" font-size="12" fill="#5D6670">0.438</text>
+<line x1="624.0" y1="105" x2="624.0" y2="490" stroke="#E6E8EB"/>
+<text x="624.0" y="518" text-anchor="middle" font-family="Arial" font-size="12" fill="#5D6670">0.657</text>
+<line x1="757.0" y1="105" x2="757.0" y2="490" stroke="#E6E8EB"/>
+<text x="757.0" y="518" text-anchor="middle" font-family="Arial" font-size="12" fill="#5D6670">0.876</text>
+<line x1="890.0" y1="105" x2="890.0" y2="490" stroke="#E6E8EB"/>
+<text x="890.0" y="518" text-anchor="middle" font-family="Arial" font-size="12" fill="#5D6670">1.094</text>
+<text x="211" y="162.8" text-anchor="end" font-family="Arial" font-size="15" fill="#20242A">Resource Allocation</text>
+<rect x="225" y="126.2" width="593.7" height="53.9" fill="#2457A6"/>
+<text x="827.7" y="162.8" font-family="Arial" font-size="14" font-weight="700" fill="#20242A">0.9772</text>
+<text x="211" y="259.1" text-anchor="end" font-family="Arial" font-size="15" fill="#20242A">Adamic-Adar</text>
+<rect x="225" y="222.4" width="589.7" height="53.9" fill="#E19728"/>
+<text x="823.7" y="259.1" font-family="Arial" font-size="14" font-weight="700" fill="#20242A">0.9705</text>
+<text x="211" y="355.3" text-anchor="end" font-family="Arial" font-size="15" fill="#20242A">Common Neighbors</text>
+<rect x="225" y="318.7" width="586.7" height="53.9" fill="#6B7A3A"/>
+<text x="820.7" y="355.3" font-family="Arial" font-size="14" font-weight="700" fill="#20242A">0.9657</text>
+<text x="211" y="451.6" text-anchor="end" font-family="Arial" font-size="15" fill="#20242A">Jaccard</text>
+<rect x="225" y="414.9" width="586.6" height="53.9" fill="#C05A78"/>
+<text x="820.6" y="451.6" font-family="Arial" font-size="14" font-weight="700" fill="#20242A">0.9655</text>
+</svg>

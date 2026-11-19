@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "status": "success",
+  "run_id": "partition-accept-01-1-p4-default-aqe",
+  "completed_at": "2026-11-18T16:57:00.943027+00:00",
+  "input": "/workspace/data/youtube_sample_200k.txt",
+  "mode": "baseline",
+  "k": 10,
+  "max_wedges": 50000000,
+  "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+  "format": "parquet",
+  "tables": {
+    "clean_edges": {
+      "format": "parquet",
+      "relative_path": "tables/clean_edges",
+      "path": "file:///workspace/artifacts/partition-benchmark/runs/partition-accept-01-1-p4-default-aqe/tables/clean_edges",
+      "write_seconds": 4.4769876180000026
+    },
+    "quarantine": {
+      "format": "parquet",
+      "relative_path": "tables/quarantine",
+      "path": "file:///workspace/artifacts/partition-benchmark/runs/partition-accept-01-1-p4-default-aqe/tables/quarantine",
+      "write_seconds": 2.4242207039999997
+    },
+    "adjacency": {
+      "format": "parquet",
+      "relative_path": "tables/adjacency",
+      "path": "file:///workspace/artifacts/partition-benchmark/runs/partition-accept-01-1-p4-default-aqe/tables/adjacency",
+      "write_seconds": 7.227914835
+    },
+    "degree": {
+      "format": "parquet",
+      "relative_path": "tables/degree",
+      "path": "file:///workspace/artifacts/partition-benchmark/runs/partition-accept-01-1-p4-default-aqe/tables/degree",
+      "write_seconds": 3.8590570629999945
+    },
+    "candidate_scores": {
+      "format": "parquet",
+      "relative_path": "tables/candidate_scores",
+      "path": "file:///workspace/artifacts/partition-benchmark/runs/partition-accept-01-1-p4-default-aqe/tables/candidate_scores",
+      "write_seconds": 6.733299043000002
+    },
+    "recommendations": {
+      "format": "parquet",
+      "relative_path": "tables/recommendations",
+      "path": "file:///workspace/artifacts/partition-benchmark/runs/partition-accept-01-1-p4-default-aqe/tables/recommendations",
+      "write_seconds": 6.215228461999999
+    }
+  },
+  "quality": {
+    "input_rows": 200001,
+    "classification_counts": {
+      "ignored": 1,
+      "malformed": 0,
+      "overflow": 0,
+      "negative_id": 0,
+      "self_loop": 0,
+      "valid": 200000
+    },
+    "duplicate_valid_rows": 0,
+    "clean_edges": 200000,
+    "nodes": 201482,
+    "directed_edges": 400000,
+    "max_degree": 1945,
+    "theoretical_wedges": 6657697,
+    "quarantined_rows": 0,
+    "input_accounting_passed": true,
+    "adjacency_count_passed": true,
+    "id_policy": "exactly two signed-integer tokens; IDs must fit signed int64 and be nonnegative; self-loops rejected; blank/#comment rows ignored",
+    "wedge_budget": {
+      "max_wedges": 50000000,
+      "passed": true
+    },
+    "candidate_pairs": 6639492,
+    "recommendation_rows": 3783816,
+    "result_checks": {
+      "no_existing_edges_in_candidates": true,
+      "candidate_score_invariants": true,
+      "recommendation_row_upper_bound": true
+    }
+  },
+  "timings": {
+    "clean_materialize_and_write_seconds": 27.650162365,
+    "score_materialize_and_write_seconds": 17.857927271999998,
+    "topk_materialize_and_write_seconds": 41.53584751100001,
+    "validation_seconds": 1.8301906110000061,
+    "pipeline_seconds": 88.889749295,
+    "spark_startup_seconds": 1.7510549080000004,
+    "end_to_end_seconds": 91.234534147
+  },
+  "environment": {
+    "python": "3.8.10 (default, Mar 18 2025, 20:04:55) \n[GCC 9.4.0]",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.29",
+    "spark": "3.5.7",
+    "java_version": "11.0.27",
+    "java_vendor": "Eclipse Adoptium",
+    "application_id": "local-1795020931339",
+    "master": "local[2]",
+    "default_parallelism": 2,
+    "shuffle_partitions": 4,
+    "adaptive_enabled": "true",
+    "adaptive_coalesce_enabled": "true",
+    "adaptive_advisory_partition_size": "67108864b",
+    "adaptive_coalesce_parallelism_first": "true",
+    "adaptive_coalesce_min_partition_size": "1048576b",
+    "driver_memory": "2g",
+    "execution_control_requests": {
+      "disable_adaptive_coalesce": false,
+      "adaptive_advisory_partition_bytes": null,
+      "adaptive_coalesce_size_first": false
+    },
+    "storage_level": "MEMORY_AND_DISK",
+    "iceberg_package": null
+  },
+  "event_log_directory": "/workspace/artifacts/partition-benchmark/event-logs",
+  "execution_parameters": {
+    "shuffle_partitions": 4,
+    "requested_adaptive_settings": {
+      "spark.sql.adaptive.enabled": "true",
+      "spark.sql.adaptive.skewJoin.enabled": "true"
+    },
+    "effective_coalesce_enabled": "true",
+    "effective_advisory_partition_size": "67108864b",
+    "effective_coalesce_parallelism_first": "true"
+  },
+  "publication": {
+    "type": "local_atomic_directory_rename",
+    "manifest_is_visibility_boundary": true,
+    "iceberg_cross_table_transaction": false,
+    "successful_run_is_immutable": true
+  },
+  "limits": [
+    "Exact self-join enumerates O(sum(degree^2)) wedges; extreme-degree hubs can still exhaust resources.",
+    "Optimized mode is a measurable hypothesis; baseline already benefits from Spark partial aggregation.",
+    "No speedup, cluster scalability, online recommendation benefit or temporal accuracy is asserted by this run.",
+    "An OS-killed process can leave a lock; verify the PID is no longer running before manually removing its .locks file."
+  ]
+}

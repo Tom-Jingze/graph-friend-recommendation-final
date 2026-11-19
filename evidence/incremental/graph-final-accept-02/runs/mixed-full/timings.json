@@ -1,0 +1,7 @@
+{
+  "clean_materialize_and_write_seconds": 17.704715776999933,
+  "score_materialize_and_write_seconds": 5.111952983000037,
+  "topk_materialize_and_write_seconds": 6.470167751999952,
+  "validation_seconds": 0.900742269000034,
+  "pipeline_seconds": 30.215529838000066
+}

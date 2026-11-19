@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "kind": "incremental",
+  "status": "success",
+  "run_id": "empty",
+  "completed_at": "2026-11-19T02:15:46.499564+00:00",
+  "base_run_id": "mixed",
+  "base_run": "/workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/mixed",
+  "request": {
+    "base_manifest_sha256": "b04c7562a7cddd3941f732c60bfc1e76bc856d272b89ac813c4cb2ab33d3e925",
+    "changes_sha256": "3a3356568c7d14d36bd885bab44cc8695babf5e1a99118da80edea36d90d5bd3",
+    "k": 10,
+    "format": "parquet",
+    "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+    "algorithm": "two-hop-invalidation-v1",
+    "request_sha256": "ebf08fd323d4a571d58fd9a5801f7a53ea5677d1d1c8312af62fdd4f7c6ac99c"
+  },
+  "k": 10,
+  "format": "parquet",
+  "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+  "tables": {
+    "clean_edges": {
+      "format": "parquet",
+      "relative_path": "tables/clean_edges",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/clean_edges",
+      "write_seconds": 2.244885509000028
+    },
+    "adjacency": {
+      "format": "parquet",
+      "relative_path": "tables/adjacency",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/adjacency",
+      "write_seconds": 2.3334067419999656
+    },
+    "degree": {
+      "format": "parquet",
+      "relative_path": "tables/degree",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/degree",
+      "write_seconds": 2.27165245599997
+    },
+    "changes": {
+      "format": "parquet",
+      "relative_path": "tables/changes",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/changes",
+      "write_seconds": 3.8553226199999244
+    },
+    "effective_adds": {
+      "format": "parquet",
+      "relative_path": "tables/effective_adds",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/effective_adds",
+      "write_seconds": 2.0216985039999145
+    },
+    "effective_deletes": {
+      "format": "parquet",
+      "relative_path": "tables/effective_deletes",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/effective_deletes",
+      "write_seconds": 4.196264160000055
+    },
+    "affected_users": {
+      "format": "parquet",
+      "relative_path": "tables/affected_users",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/affected_users",
+      "write_seconds": 2.5727329100000134
+    },
+    "candidate_scores": {
+      "format": "parquet",
+      "relative_path": "tables/candidate_scores",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/candidate_scores",
+      "write_seconds": 4.227680411000051
+    },
+    "recommendations": {
+      "format": "parquet",
+      "relative_path": "tables/recommendations",
+      "path": "file:///workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/runs/empty/tables/recommendations",
+      "write_seconds": 4.166865284999972
+    }
+  },
+  "quality": {
+    "requested_unique_changes": 19,
+    "effective_adds": 0,
+    "effective_deletes": 19,
+    "affected_users": 21,
+    "clean_edges": 0,
+    "nodes": 0,
+    "noop_changes": 0,
+    "affected_oriented_wedges_upper_bound": 0,
+    "recomputed_candidate_pairs": 0,
+    "retained_candidate_pairs": 0,
+    "candidate_pairs": 0,
+    "recommendation_rows": 0
+  },
+  "timings": {
+    "graph_seconds": 27.56189247100008,
+    "pipeline_seconds": 43.251062957000045
+  },
+  "environment": {
+    "spark": "3.5.7",
+    "application_id": "local-1795054140112",
+    "master": "local[2]",
+    "partitions": 4
+  },
+  "event_log_directory": "/workspace/outputs/graph-friend-recommendation-final/artifacts/incremental/graph-final-accept-02/event-logs",
+  "publication": {
+    "type": "local_atomic_directory_rename",
+    "manifest_is_visibility_boundary": true,
+    "iceberg_cross_table_transaction": false,
+    "successful_run_is_immutable": true
+  },
+  "limits": [
+    "Static graph change replay, not real historical social events.",
+    "Conservative two-hop invalidation can cover most users for a hub update; no speedup guarantee.",
+    "Complete snapshot tables are rewritten; computation is incremental, physical output I/O is not.",
+    "Iceberg commits are per table; readers must enter through the successful manifest."
+  ]
+}

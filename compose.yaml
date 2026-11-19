@@ -1,0 +1,99 @@
+name: graph-friend-recommendation-final
+
+x-spark-common: &spark-common
+  build:
+    context: .
+  image: graph-friend-recommendation-spark:3.5.7
+  init: true
+  working_dir: /app
+  volumes:
+    - type: bind
+      source: .
+      target: /app
+
+services:
+  spark-master:
+    <<: *spark-common
+    hostname: spark-master
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master", "--port", "7077", "--webui-port", "8080"]
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/spark-master/7077'"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  spark-worker-1:
+    <<: *spark-common
+    hostname: spark-worker-1
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "--host", "spark-worker-1", "--cores", "1", "--memory", "1g", "--webui-port", "8081", "spark://spark-master:7077"]
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+  spark-worker-2:
+    <<: *spark-common
+    hostname: spark-worker-2
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "--host", "spark-worker-2", "--cores", "1", "--memory", "1g", "--webui-port", "8081", "spark://spark-master:7077"]
+    ports:
+      - "127.0.0.1:8082:8081"
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+  submit:
+    <<: *spark-common
+    hostname: submit
+    profiles: ["tools"]
+    command:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - spark://spark-master:7077
+      - --deploy-mode
+      - client
+      - --driver-memory
+      - 1g
+      - --executor-memory
+      - 768m
+      - --conf
+      - spark.cores.max=2
+      - --conf
+      - spark.driver.host=submit
+      - --conf
+      - spark.driver.bindAddress=0.0.0.0
+      - --conf
+      - spark.driver.port=7078
+      - --conf
+      - spark.blockManager.port=7079
+      - /app/src/spark_pipeline.py
+      - --master
+      - spark://spark-master:7077
+      - --input
+      - /app/${GRAPH_INPUT:-data/facebook_combined.txt.gz}
+      - --output
+      - /app/${GRAPH_OUTPUT:-artifacts/docker}
+      - --run-id
+      - ${RUN_ID:-docker-demo-001}
+      - --format
+      - ${TABLE_FORMAT:-parquet}
+      - --mode
+      - ${MODE:-baseline}
+      - --partitions
+      - ${SHUFFLE_PARTITIONS:-4}
+      - --max-wedges
+      - ${MAX_WEDGES:-50000000}
+      - --iceberg-package=
+    ports:
+      - "127.0.0.1:4040:4040"
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      spark-worker-1:
+        condition: service_started
+      spark-worker-2:
+        condition: service_started
+

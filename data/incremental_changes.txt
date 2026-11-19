@@ -1,0 +1,7 @@
+# One atomic, unordered change batch; identical duplicates are ignored.
+ADD 0 2
+ADD 2 0
+DELETE 4 5
+ADD 7 8
+ADD 100 101
+DELETE 400 401

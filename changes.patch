@@ -1,0 +1,2469 @@
+--- original/compose.yaml
++++ v2/compose.yaml
+@@ -0,0 +1,98 @@
++name: graph-friend-recommendation-v2
++
++x-spark-common: &spark-common
++  build:
++    context: .
++  image: graph-friend-recommendation-spark:3.5.7
++  init: true
++  working_dir: /app
++  volumes:
++    - type: bind
++      source: .
++      target: /app
++
++services:
++  spark-master:
++    <<: *spark-common
++    hostname: spark-master
++    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master", "--host", "spark-master", "--port", "7077", "--webui-port", "8080"]
++    ports:
++      - "127.0.0.1:8080:8080"
++    healthcheck:
++      test: ["CMD-SHELL", "bash -c '</dev/tcp/spark-master/7077'"]
++      interval: 3s
++      timeout: 3s
++      retries: 30
++      start_period: 10s
++
++  spark-worker-1:
++    <<: *spark-common
++    hostname: spark-worker-1
++    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "--host", "spark-worker-1", "--cores", "1", "--memory", "1g", "--webui-port", "8081", "spark://spark-master:7077"]
++    ports:
++      - "127.0.0.1:8081:8081"
++    depends_on:
++      spark-master:
++        condition: service_healthy
++
++  spark-worker-2:
++    <<: *spark-common
++    hostname: spark-worker-2
++    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "--host", "spark-worker-2", "--cores", "1", "--memory", "1g", "--webui-port", "8081", "spark://spark-master:7077"]
++    ports:
++      - "127.0.0.1:8082:8081"
++    depends_on:
++      spark-master:
++        condition: service_healthy
++
++  submit:
++    <<: *spark-common
++    hostname: submit
++    profiles: ["tools"]
++    command:
++      - /opt/spark/bin/spark-submit
++      - --master
++      - spark://spark-master:7077
++      - --deploy-mode
++      - client
++      - --driver-memory
++      - 1g
++      - --executor-memory
++      - 768m
++      - --conf
++      - spark.cores.max=2
++      - --conf
++      - spark.driver.host=submit
++      - --conf
++      - spark.driver.bindAddress=0.0.0.0
++      - --conf
++      - spark.driver.port=7078
++      - --conf
++      - spark.blockManager.port=7079
++      - /app/src/spark_pipeline.py
++      - --master
++      - spark://spark-master:7077
++      - --input
++      - /app/${GRAPH_INPUT:-data/facebook_combined.txt.gz}
++      - --output
++      - /app/${GRAPH_OUTPUT:-artifacts/docker}
++      - --run-id
++      - ${RUN_ID:-docker-demo-001}
++      - --format
++      - ${TABLE_FORMAT:-parquet}
++      - --mode
++      - ${MODE:-baseline}
++      - --partitions
++      - ${SHUFFLE_PARTITIONS:-4}
++      - --max-wedges
++      - ${MAX_WEDGES:-50000000}
++      - --iceberg-package=
++    ports:
++      - "127.0.0.1:4040:4040"
++    depends_on:
++      spark-master:
++        condition: service_healthy
++      spark-worker-1:
++        condition: service_started
++      spark-worker-2:
++        condition: service_started
+--- original/FINAL_REPORT_zh.md
++++ v2/FINAL_REPORT_zh.md
+@@ -1,43 +1,25 @@
+-# 大规模社交图好友推荐与链接预测：实验报告
++# 社交图推荐 V2 实现说明
+ 
+-## 实验结论
++V2 将原小图算法实验扩展为可运行、可检查的 Spark 批处理代码，并提供 Parquet 默认输出、Iceberg 可选快照表、失败重跑及真实 eventlog 指标。升级服务于大数据／数据开发能力展示：数据契约、分层计算、质量对账、发布语义及有依据的性能分析。
+ 
+-在Stanford SNAP Facebook匿名社交图（4,039个节点、88,234条边）上，Resource Allocation在5个连通性保护的随机划分中取得最佳结果：困难负样本AUC为0.9772±0.0007，Recall@10为0.5617±0.0054，NDCG@10为0.5283±0.0019。相较原始Common Neighbors，Recall@10提高3.75个百分点，NDCG@10提高3.56个百分点。
++## 实现内容
+ 
+-四分区Combiner记录量模拟中，中间楔形记录由约774万条降至约227万条，平均减少70.7%。该数字衡量待Shuffle记录数，不等同于真实集群运行时间；原四节点Hadoop/Spark性能仍应以集群日志为准。
++Spark DataFrame 负责输入分类、无向边去重、双向邻接、度数、精确二跳候选及 CN/Jaccard/AA/RA 四种分数，最后按用户与方法计算 Top-K。大表不 collect 到 driver；driver 只收取单行聚合与快照元数据。所有运行写出质量、环境、时间、执行计划与成功 manifest。
+ 
+-## 实验设计
++两种计算路径用于实测取舍：baseline 汇总后排除已有边；optimized 提前排除已有边并增加 bridge 桶的两级聚合。它们保持候选与打分定义，不通过裁剪高连接度节点来缩小问题。Spark 已有部分聚合，本轮 [Facebook 事件日志对照](validation/facebook-event-comparison.json)显示实验路径 score shuffle 增加 108.53%（read/write 各 26,924,883 B 对 56,147,761 B），score 含落表为 12.376 s 对 13.052 s，未体现收益。默认入口据此统一采用 baseline，optimized 保留为显式实验，不继续增加新优化策略。完整端到端差异受 clean 阶段及缓存条件影响，不作为加速结论。连接前使用楔形数量预算阻止明显超出当前资源的工作量。
+ 
+-- 数据：Stanford SNAP ego-Facebook combined graph。
+-- 划分：先保护完整图的一棵生成树，再从非树边中隐藏10%，保证训练图始终连通。
+-- 随机种子：11、22、33、44、55。
+-- 方法：Common Neighbors、Jaccard、Adamic-Adar、Resource Allocation。
+-- 成对指标：随机负边AUC/AP，以及共享至少一个训练邻居的困难负边AUC/AP。
+-- 排序指标：Precision@10、Recall@10、NDCG@10、HitRate@10。
++成功结果按 run-id 不可变发布。可控异常注入发生在 clean 或 score 阶段，支持同 run-id 从头重跑。暂存目录与最终目录之间使用同一本地文件系统的原子改名，manifest 是消费边界。Iceberg 提供单表快照，V2 没有实现跨表事务或对象存储原子发布。
+ 
+-## 方法对比（5个随机种子均值）
++## 运行和评估证据
+ 
+-| 方法 | 困难AUC | Precision@10 | Recall@10 | NDCG@10 | HitRate@10 |
+-|---|---:|---:|---:|---:|---:|
+-| Resource Allocation | 0.9772 | 0.2627 | 0.5617 | 0.5283 | 0.8699 |
+-| Adamic-Adar | 0.9705 | 0.2535 | 0.5431 | 0.5102 | 0.8587 |
+-| Common Neighbors | 0.9657 | 0.2477 | 0.5242 | 0.4927 | 0.8436 |
+-| Jaccard | 0.9655 | 0.2473 | 0.5072 | 0.4807 | 0.8198 |
++本轮真实执行范围及成绩见 IMPLEMENTATION_REPORT_zh.md，不在此重复预填。任何性能描述都应能追溯到实际输入哈希、manifest.environment、timings、执行计划和 eventlog JSON。更大图下载与采样元数据明确区分源数据全量、请求采样量和实际去重后的处理规模。
+ 
+-## 可信度与限制
++指标侧修复旧 AP 同分时受正例输入顺序影响的问题，采用阈值分组非插值 AP，并增加负采样容量检查和输入边界校验。原 results/ 保持历史身份；旧 AP 不作为 V2 结果。静态隐藏边评估测的是图结构恢复，图数据没有真实时间戳，不能声称未来好友预测或线上业务收益。
+ 
+-随机负边AUC达到约0.99，是因为随机非边通常没有共同邻居，任务过于容易。因此简历和报告不使用随机AUC作为主结果，而采用困难负边和Top-K指标。数据没有时间戳，所以隐藏边实验验证的是静态图结构恢复能力，不能声称等价于线上推荐提升。
++## 可用于求职材料的表述边界
+ 
+-## 推荐简历描述
++可按代码与真实运行证据描述：实现 Spark 社交图推荐批处理，完成输入质量分类、分层落表、四种打分和稳定 Top-K，设计不可变 run-id 与失败重跑，解析真实 Spark 事件日志分析 shuffle、spill、任务长尾与重试成本。
+ 
+-**大规模社交图好友推荐与分布式性能优化｜Hadoop、Spark、Python**
++只有实施报告已验证后，才能填写具体处理节点/边数、耗时、Parquet/Iceberg运行情况、容器集群配置和优化幅度；如果优化更慢也应报告原因。单机四容器不能写成四台物理机器，旧四分区记录量模拟不能写成真实网络传输下降，完整数据已下载不能写成完整数据已计算。
+ 
+-- 基于Docker搭建4节点Hadoop/Spark集群，在包含4,039个用户、88,234条关系的SNAP Facebook社交图上实现分布式候选好友生成与Top-K排序，并将核心计算由MapReduce迁移至PySpark。
+-- 实现Common Neighbors、Jaccard、Adamic-Adar及Resource Allocation链接预测算法，设计保护生成树的隐藏边评估协议；5个随机种子下Resource Allocation取得Recall@10=0.562、NDCG@10=0.528，较共同好友基线分别提升3.75、3.56个百分点。
+-- 通过Combiner对二跳路径进行本地聚合，将四分区模拟的中间记录量由约774万降至227万，减少70.7%；完成困难负样本、Top-K排序及多随机种子稳定性分析。
+-
+-## 数据来源
+-
+-Stanford SNAP: https://snap.stanford.edu/data/ego-Facebook.html
+-
+-McAuley, J. and Leskovec, J. *Learning to Discover Social Circles in Ego Networks*. NeurIPS 2012.
++历史三份文档的原始版本保存在 docs/legacy/，保留原项目身份与当时说法，不代表本次验证背书。后续可在实测瓶颈基础上扩展增量更新、调度或规模对照，当前交付保持 Spark 与表存储这一条批处理主线。
+--- original/IMPLEMENTATION_REPORT_zh.md
++++ v2/IMPLEMENTATION_REPORT_zh.md
+@@ -0,0 +1,70 @@
++# 好友推荐工程升级实施报告
++
++## 本轮已完成
++
++原始 ZIP 保留。新增可运行的 Spark SQL/DataFrame 批处理、异常行隔离、关系规范化与去重、邻接/度数/候选/Top-K 六层输出，支持 Parquet 与 Iceberg。评分不把已有好友作为候选；保存原始分数，按 HALF_EVEN 保留12位的排序分数和候选ID确定顺序。
++
++成功运行通过本地目录原子发布 manifest；成功 run-id 不可覆盖。异常退出保留失败诊断，同一 run-id 可从头重算。Iceberg 每张表独立提交，成功 manifest 是跨表读取的发布边界，不声称跨表事务。
++
++修正原评估 AP 对同分样本偏乐观的问题，补充输入和负采样边界。历史 results/ 与原三份文档保留并标注旧口径，未伪造新 AP 或模型效果。原始代码差异见 changes.patch。
++
++## 实际执行结果
++
++| 运行 | 原始唯一边 | 节点 | 候选对 | 四方法Top-K行数 | 应用端到端秒 |
++|---|---:|---:|---:|---:|---:|
++| Facebook local 基线 | 88,234 | 4,039 | 1,358,067 | 161,536 | 63.09 |
++| Facebook local 两阶段实验 | 88,234 | 4,039 | 1,358,067 | 161,536 | 58.13 |
++| YouTube 20万边采样 | 200,000 | 201,482 | 6,639,492 | 3,783,816 | 97.13 |
++| Facebook 两个worker | 88,234 | 4,039 | 1,358,067 | 161,536 | 73.43 |
++
++local 对照均使用官方 Apache Spark 3.5.7 镜像、Java 11.0.27、local[2]、4个shuffle分区、2 CPU/6GB容器限制、2GB driver堆。表中应用端到端时间不含拉镜像和启动容器。
++
++集群由同一 Docker 主机上的 master、两个worker和submit driver组成；每个worker提供1核/1GB容量，executor堆768MB、driver堆1GB。两个executor分别完成3和141个成功task，任务明显不均，见 validation/cluster-executors.json。该记录证明跨容器执行，不是四台物理机器测试，也不用于推断均衡扩展或集群加速比。服务已在验证后停止，数据保留。
++
++YouTube 原图由 SNAP 官方下载，2,987,624条边。固定 seed=42 对有效边记录做蓄水池采样，得到200,000条唯一边、201,482个节点、6,657,697条理论楔形。来源、SHA256和采样方法见 data/youtube_sample_200k.txt.json。本轮没有执行全量 YouTube 候选计算，也未把采样质量当全图推荐质量。
++
++该采样运行实际Shuffle读写各289,881,519字节，disk spill为317,327,309字节，成功task的p50/p95为193/5683ms。已暴露窗口排序和内存压力，见validation/youtube-event-metrics.json；这为后续分区、候选存储及Top-K策略优化提供了实测基线，当前没有宣称这些瓶颈已解决。
++
++## 性能取舍
++
++| score阶段真实指标 | baseline | 两阶段实验 |
++|---|---:|---:|
++| Shuffle read，各字节 | 26,924,883 | 56,147,761 |
++| Shuffle write，各字节 | 26,924,883 | 56,147,761 |
++| score计算及落表秒 | 12.376 | 13.052 |
++| 磁盘spill字节 | 0 | 0 |
++
++两阶段聚合使score shuffle增加108.53%，此次没有体现优化收益，因此代码、Compose和本地脚本默认已切回baseline。实验方案仍可显式选用。完整端到端时间受clean阶段、缓存与启动差异影响，单次对照没有统计置信度，不宣称加速。baseline本身已有Spark部分聚合，增加聚合层不是自动收益。
++
++原来的70.7%仍只表示本地中间记录模拟，不与本轮实测Shuffle字节混用。真实Spark事件日志按应用ID匹配；同时报告所有task尝试的实际开销与去重后的逻辑任务口径，job复用stage不重复汇总。原始日志已gzip压缩保存在evidence/eventlogs/。
++
++## 正确性和恢复验证
++
++- 图项目当前54项测试，电机项目28项，共82个唯一测试用例已通过。其中5项实际Spark DataFrame集成测试在Linux容器执行；其余77项在宿主执行。新增parser/默认入口检查后复跑了相关单测，没有重复耗费Spark集成任务。
++- Facebook两方案完整比较1,358,067个候选对、161,536条排名记录；评分在1e-12容差内一致，Top-K逐行一致。另抽1000个候选对和64个用户，与独立Python集合实现核对通过。
++- local与两个worker集群的完整结果再次比较通过，四种分数在本次结果中逐值相同。验证器是本地pandas审查工具，会加载结果表；生产计算本身没有collect全图。
++- 受控脏数据中识别1条重复关系、5条异常行，保留8条唯一边。Iceberg在clean后注入失败，日志确认为预设异常；同run-id重跑成功，第三次拒绝覆盖。
++- 实际查询6张Iceberg表的manifest快照，VERSION AS OF均读取成功；重跑过的4张清洗层表各保留2个快照。结果见validation/iceberg-snapshots.json。
++- 默认5,000万理论楔形预算在自连接前检查，避免直接对超级节点图盲目展开。当前实验没有实现消除超级节点成本的算法。
++
++## 复现入口
++
++交付包内已附官方、SHA256固定的Iceberg运行JAR，完整来源与许可证在vendor/。已有基础镜像时，可用已验证的快速构建：
++
++```powershell
++docker build --pull=false -f Dockerfile.offline -t graph-friend-recommendation-spark:3.5.7 .
++docker compose up -d --no-build spark-master spark-worker-1 spark-worker-2
++$env:RUN_ID = 'my-first-run'
++docker compose run --rm --use-aliases --service-ports submit
++docker compose down
++```
++
++也已验证Dockerfile在线构建。第一次在线构建遇到Dockerfile外部前端认证连接失败，去掉不必要的syntax下载后重建成功；最终Compose健康检查也已按master实际监听地址修正并实跑。
++
++压缩包包含代码、原Facebook数据、YouTube采样、文档、JAR及验证证据；为避免冗余，没有打包批量Parquet表与Iceberg warehouse。本机完整表仍保留在artifacts/中。evidence/runs/保存了它们的运行清单，清单中的原绝对路径只作为本次记录，不保证搬到另一台机器后可直接读取；用新run-id复现即可。
++
++## 可用于简历的已完成表述
++
++基于Spark SQL与Iceberg构建社交图候选推荐批处理管道，实现关系清洗、异常隔离、四种链接评分和Top-K分层输出；在20万条真实采样关系、约20万节点上生成约664万候选对，并完成本地与双worker集群结果一致性、Iceberg快照查询及失败重跑验证。结合真实Spark事件日志比较聚合策略，识别两阶段聚合的Shuffle回退，选择资源开销更低的默认方案。
++
++该表述描述工程验证，不包含线上用户效果、未来关系预测或未经实测的加速比例。
+--- original/README.md
++++ v2/README.md
+@@ -1,35 +1,129 @@
+-# 大规模社交图好友推荐与链接预测
++# 社交图推荐批处理管道 V2
+ 
+-本项目使用 Stanford SNAP `ego-Facebook` 合并图（4,039 个节点、88,234 条无向边），将原有“共同好友 + MapReduce”课程项目升级为可离线评估的图链接预测实验。
++本项目面向大数据／数据开发实习，围绕静态社交图实现可审查的 Spark 批处理：清洗、质量检查、二跳候选、四种打分、Top-K、分层落表、失败重跑和事件日志分析。默认使用 baseline 并写 Parquet，可选择 Iceberg 快照表。现有 Facebook 数据用于正确性与回归；更大数据通过独立下载、采样和工作量预检接入。
+ 
+-## 方法
++当前实现与真实运行记录分开管理。代码、配置并不证明集群或加速已经测过；本轮实测范围与成绩见 [IMPLEMENTATION_REPORT_zh.md](IMPLEMENTATION_REPORT_zh.md)。历史文档在 [docs/legacy](docs/legacy/NOTICE.md)，原 results/ 是旧实验，不属于 V2 新成绩。
+ 
+-- Common Neighbors
+-- Jaccard Similarity
+-- Adamic-Adar
+-- Resource Allocation
++## 数据链路与输出
+ 
+-## 无泄漏评估协议
++```mermaid
++flowchart LR
++  A[静态边文件] --> B[Spark 解析与分类]
++  B --> Q[隔离异常行]
++  B --> C[去重无向边]
++  C --> D[双向邻接与度数]
++  D --> E[二跳候选与四种打分]
++  E --> F[按用户和方法 Top-K]
++  C --> G[Parquet 或 Iceberg]
++  D --> G
++  E --> G
++  F --> G
++  G --> H[manifest 发布边界]
++```
+ 
+-每个随机种子先在完整图上构造一棵生成树，保护树边后从其余边中隐藏 10%。因此训练图始终连通，测试边不会出现在训练邻接表中。成对评价使用等量、且在完整图中不存在的负边；Top-K 指标按用户聚合隐藏好友。
++输入必须是每行两个非负 int64 节点 ID。注释和空行忽略，格式错误、溢出、负 ID、自环分别分类并隔离；无向边归一化后去重。打分实现 Common Neighbors、Jaccard、Adamic-Adar、Resource Allocation，不把已有好友放进候选。排序使用保留 12 位小数的 HALF_EVEN 打分降序、候选 ID 升序，原始分数保留供审查。
+ 
+-指标包括 AUC、Average Precision、Precision@10、Recall@10、NDCG@10 和 HitRate@10，默认运行 5 个随机种子并报告均值与标准差。AUC/AP 同时使用随机负边和更严格的二跳困难负边；主结论采用困难负边，避免随机负采样使指标虚高。
++`baseline` 在汇总楔形路径后排除已有边；`optimized` 提前排除已有边，并增加 bridge 哈希桶的两级聚合。Spark 自己已经会部分聚合，两级聚合也没有消除高连接度节点的二跳展开开销。
+ 
+-## 已验证结果
++当前默认采用 **baseline**。在已完成的一次 Facebook 全图、local[2]、Parquet 对照中，score 阶段 shuffle read/write 各由 26,924,883 B 增至 56,147,761 B，实验方案增加 108.53%；score 含落表由 12.376 s 变为 13.052 s，未体现收益。optimized 仅保留为显式实验对照。完整端到端耗时受 clean 阶段启动与缓存条件差异影响，不据此宣称加速。原始口径与结果见 [事件日志对照](validation/facebook-event-comparison.json)，不将该单次观测推广为所有数据集的结论。
+ 
+-Resource Allocation取得最佳结果：困难负样本AUC为`0.9772±0.0007`，Recall@10为`0.5617±0.0054`，NDCG@10为`0.5283±0.0019`。相较Common Neighbors，Recall@10和NDCG@10分别提高3.75和3.56个百分点。
++一次成功运行发布到 `artifacts/<环境>/runs/<run-id>/`，包含：
+ 
+-四分区Combiner模拟将中间楔形记录由约774万条减少到227万条，平均减少70.7%。这是记录量模拟，不是实际集群运行时间。
++- `manifest.json`、`_SUCCESS`：成功发布和表引用；成功 run-id 不可覆盖。
++- `quality.json`：输入分类计数、重复边、节点/边数、楔形预算及结果不变量。
++- `environment.json`、`timings.json`、`score_plan.txt`：运行环境、分阶段时间与执行计划。
++- Parquet 模式的 `tables/`：clean_edges、quarantine、adjacency、degree、candidate_scores、recommendations。
++- Iceberg 模式的 manifest 表标识与 snapshot_id；表数据位于独立 warehouse。
+ 
+-## 复现
++输出暂存于同一根目录的 `.staging/<run-id>/`。成功后本地目录原子改名；失败留下 `failure.json`，同 run-id 可重跑。Iceberg 每表独立提交，读取方必须以成功 manifest 为入口；这不是跨表事务。进程被强杀时可能留下锁，核实进程已退出后再处理对应 `.locks/<run-id>.lock`。
++
++## 本地运行
++
++建议 Python 3.10+、Java 17，依赖固定为 PySpark 3.5.7；Iceberg 使用 `org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0`。Windows 原生 Spark/Hadoop 文件系统可能需要匹配的本地库，Docker 路径可避开这一安装问题。脚本只临时设置当前进程环境，结束后恢复，不修改系统 PATH。
+ 
+ ```powershell
+-python src/experiment.py --data data/facebook_combined.txt.gz --output results
+-python src/summarize.py --results results
++python -m pip install -r requirements-spark.txt
++.\scripts\run-local.ps1 -PythonCommand python -JavaHome 'C:\path\to\jdk17' -RunId fb-parquet-001
+ ```
+ 
+-## 数据来源
++可直接调用跨平台入口：
+ 
+-Stanford SNAP: https://snap.stanford.edu/data/ego-Facebook.html
++```bash
++python -m src.spark_pipeline --input data/facebook_combined.txt.gz --output artifacts/local --run-id fb-baseline-001 --master 'local[2]' --mode baseline --format parquet
++# Optional experimental comparison; this mode showed no benefit in the recorded run.
++python -m src.spark_pipeline --input data/facebook_combined.txt.gz --output artifacts/local --run-id fb-optimized-001 --master 'local[2]' --mode optimized --format parquet
++```
+ 
+-McAuley, J. and Leskovec, J. *Learning to Discover Social Circles in Ego Networks*. NeurIPS 2012.
++Iceberg 模式首次默认通过 Maven 解析固定版本。已有对应 runtime JAR 时可显式提供，避免重复下载：
++
++```powershell
++.\scripts\run-local.ps1 -PythonCommand python -JavaHome 'C:\path\to\jdk17' -IcebergJar 'C:\path\to\iceberg-spark-runtime-3.5_2.12-1.10.0.jar' -Format iceberg -Mode baseline -RunId fb-iceberg-001
++```
++
++失败重跑演示：先用 `-FailAfter clean -RunId retry-demo` 触发未发布失败，再去掉 `-FailAfter`、保持相同 run-id 重跑。成功后第三次使用相同 run-id 应拒绝覆盖。失败重跑从头重算，未实现断点续算。
++
++## Docker 伪分布式运行
++
++Dockerfile 使用官方 `apache/spark:3.5.7-python3`，构建时从官方 Maven Central 下载固定的 Iceberg runtime。Compose 包含一个 master、两个 worker 和一个 submit driver，所有容器将同一项目目录挂到 `/app`；Web UI 只映射到 `127.0.0.1`。这四个容器运行在同一 Docker 主机上，不能写成四台物理机器。
++
++本次交付包已附带校验过的 `vendor/` JAR。已有基础镜像时，可以用下面的离线构建替代 `docker compose build`，避免重复下载 JAR；两条构建路径均已实际通过。集群完整运行记录见实施报告。
++
++```powershell
++docker build --pull=false -f Dockerfile.offline -t graph-friend-recommendation-spark:3.5.7 .
++docker compose up -d --no-build spark-master spark-worker-1 spark-worker-2
++$env:RUN_ID = 'my-first-run'
++docker compose run --rm --use-aliases --service-ports submit
++docker compose down
++```
++
++```powershell
++docker compose build
++docker compose up -d spark-master spark-worker-1 spark-worker-2
++$env:RUN_ID = 'docker-fb-001'
++docker compose run --rm --use-aliases --service-ports submit
++docker compose down
++```
++
++`--use-aliases` 使 worker 可以用 `submit` 访问 driver；driver 广播地址为 `submit`、绑定地址为 `0.0.0.0`。Master UI 为 http://127.0.0.1:8080，worker UI 为 8081/8082，运行中的 driver UI 为 4040。
++
++可用环境变量切换 `TABLE_FORMAT=iceberg`、`MODE=optimized`（仅实验）、`GRAPH_INPUT=data/samples/youtube-200k.txt`、`GRAPH_OUTPUT=artifacts/docker`、`SHUFFLE_PARTITIONS=4`、`MAX_WEDGES=50000000`。GRAPH_INPUT/OUTPUT 是项目内相对路径；每个新成功结果使用新 RUN_ID。Compose 运行能力与本轮是否实测，以实施报告为准。
++
++## 更大真实图与工作量预算
++
++```powershell
++python scripts/fetch-youtube.py
++python -m src.prepare_data --input data/external/com-youtube.ungraph.txt.gz --output data/samples/youtube-200k.txt --sample-edges 200000 --seed 42
++.\scripts\run-local.ps1 -InputPath data/samples/youtube-200k.txt -RunId youtube-sample-001
++```
++
++[官方 YouTube 图](https://snap.stanford.edu/data/com-Youtube.html)含 1,134,890 个节点和 2,987,624 条无向边。下载器保存原始压缩文件 SHA-256、来源和 HTTP 元数据并验证 gzip CRC；SHA 是下载字节的标识，不是官方签名。采样器使用固定种子的有效边记录蓄水池采样，去重后输出实际边数、节点数、最大度数和二跳楔形量；样本不冒充全量图。
++
++精确二跳连接开销与 `sum d(v)*(d(v)-1)/2` 相关。管道在连接前检查默认 5,000 万楔形预算，超限拒绝启动自连接。只有看过预检结果和资源后才显式提高 `--max-wedges`；下载了全图不等于完成全图计算。图没有真实时间戳，不生成假时间来声称未来推荐效果。
++
++## 真实 Spark 日志与性能对照
++
++每次运行保留未压缩 Spark JSON eventlog。选定一次应用的日志文件，再运行：
++
++```powershell
++python -m src.eventlog_metrics --input artifacts/local/event-logs/<应用日志文件> --output artifacts/local/metrics-fb-baseline-001.json
++```
++
++解析器也支持 gzip 和 `events_*` rolling 目录。`summary.all_attempts` 计入成功、失败、被取消、重试和推测执行的实际资源量；`logical_successful_tasks` 对成功 stage 的每个分区选择一次成功结果。job 会共享 stage，因此 job 总量不可直接相加。输出 shuffle 读写字节、spill、CPU ns、运行/GC ms、成功 task 时长 p50/p95，并分别列出 job/stage/task 成败。shuffle read 含远端与本地读取，不等于纯网络流量。
++
++比较 baseline/optimized 时应固定数据、版本、资源、分区数和输出格式，交替运行多个独立 run-id，记录冷/热缓存条件，比较中位数及波动；不能拿单次样本宣称稳定加速。业务效果使用独立隐藏边评估，不能从执行时间推断推荐质量。
++
++## 测试与旧版实验
++
++```powershell
++python -m pytest tests/test_experiment.py tests/test_eventlog_metrics.py -q
++python -m pytest tests/test_spark_pipeline.py -q
++```
++
++前一组已有 38 项指标与日志单元测试；Spark 验证的实际执行状态及完整检查清单见 [VALIDATION.md](VALIDATION.md)和实施报告。当前源代码修正了旧 AP 的并列偏差；V2 实验使用新目录，不覆盖历史 results：
++
++```powershell
++python -m src.experiment --data data/facebook_combined.txt.gz --output artifacts/reference-v2 --source-name 'Stanford SNAP ego-Facebook combined graph' --source-url https://snap.stanford.edu/data/ego-Facebook.html
++python -m src.summarize --results artifacts/reference-v2
++```
++
++旧 AP、AUC、Top-K 和模拟记录量都保持其原实验身份。参考算法是小图评估器；大图分布式实现使用 spark_pipeline。项目尚不包含线上推荐 A/B、真实时间外推、增量删边或跨表事务。
+--- original/scripts/fetch-youtube.py
++++ v2/scripts/fetch-youtube.py
+@@ -0,0 +1,95 @@
++"""Fetch the official SNAP static YouTube graph with provenance and SHA-256.
++
++The digest records the downloaded compressed bytes; SNAP does not publish an
++authenticated SHA-256 on the dataset card. --expected-sha256 can pin a prior
++known download. This script does not create synthetic timestamps or scale data.
++"""
++from __future__ import annotations
++
++import argparse
++from datetime import datetime, timezone
++import gzip
++import hashlib
++import json
++import os
++from pathlib import Path
++import tempfile
++from urllib.request import Request, urlopen
++
++URL = "https://snap.stanford.edu/data/bigdata/communities/com-youtube.ungraph.txt.gz"
++SOURCE = "https://snap.stanford.edu/data/com-Youtube.html"
++
++
++def fetch(output: Path, expected_sha256: str | None = None) -> dict:
++    output = output.resolve()
++    metadata_path = output.with_suffix(output.suffix + ".source.json")
++    if output.exists() or metadata_path.exists():
++        raise FileExistsError(f"Refusing to overwrite data or provenance: {output}")
++    if expected_sha256 is not None:
++        expected_sha256 = expected_sha256.lower()
++        if len(expected_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_sha256):
++            raise ValueError("expected-sha256 must be 64 hexadecimal characters")
++    output.parent.mkdir(parents=True, exist_ok=True)
++    descriptor, temporary_name = tempfile.mkstemp(prefix=".youtube-download-", suffix=".part", dir=output.parent)
++    temporary = Path(temporary_name)
++    digest, size = hashlib.sha256(), 0
++    try:
++        with os.fdopen(descriptor, "wb") as destination:
++            with urlopen(Request(URL, headers={"User-Agent": "graph-friend-recommendation-v2/1.0"}), timeout=60) as response:
++                final_url = response.geturl()
++                content_length = response.headers.get("Content-Length")
++                last_modified = response.headers.get("Last-Modified")
++                for block in iter(lambda: response.read(1024 * 1024), b""):
++                    destination.write(block)
++                    digest.update(block)
++                    size += len(block)
++            destination.flush()
++            os.fsync(destination.fileno())
++        if content_length is not None and size != int(content_length):
++            raise ValueError(f"Incomplete download: expected {content_length} bytes, got {size}")
++        actual_sha256 = digest.hexdigest()
++        if expected_sha256 is not None and actual_sha256 != expected_sha256:
++            raise ValueError(f"SHA-256 mismatch: received {actual_sha256}")
++        # Reading to EOF verifies the gzip trailer/CRC before publication.
++        with gzip.open(temporary, "rb") as compressed:
++            for _ in iter(lambda: compressed.read(1024 * 1024), b""):
++                pass
++        metadata = {
++            "dataset": "SNAP com-Youtube undirected social graph",
++            "source_page": SOURCE, "download_url": URL, "resolved_download_url": final_url,
++            "downloaded_at_utc": datetime.now(timezone.utc).isoformat(),
++            "http_last_modified": last_modified, "compressed_bytes": size,
++            "sha256_compressed_file": actual_sha256, "gzip_crc_verified": True,
++            "expected_sha256_supplied": expected_sha256 is not None,
++            "dataset_card_statistics": {"nodes": 1_134_890, "undirected_edges": 2_987_624},
++            "statistics_independently_counted": False,
++            "citation": "J. Yang and J. Leskovec. Defining and Evaluating Network Communities based on Ground-truth. ICDM 2012.",
++            "limitations": ["Static graph without real edge event timestamps.",
++                           "SHA-256 records downloaded bytes; it is not an official signed digest.",
++                           "Full-graph download does not demonstrate full-graph Spark execution; see run manifests."],
++        }
++        # Windows rename refuses an existing destination and works without the
++        # hard-link privilege required in some Windows sandboxes. POSIX rename
++        # would replace an existing file, so use exclusive hard-link creation.
++        if os.name == "nt":
++            os.rename(temporary, output)
++        else:
++            os.link(temporary, output)
++        with metadata_path.open("x", encoding="utf-8") as handle:
++            json.dump(metadata, handle, ensure_ascii=False, indent=2)
++            handle.write("\n")
++        return metadata
++    finally:
++        temporary.unlink(missing_ok=True)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--output", type=Path, default=Path("data/external/com-youtube.ungraph.txt.gz"))
++    parser.add_argument("--expected-sha256")
++    args = parser.parse_args()
++    print(json.dumps(fetch(args.output, args.expected_sha256), ensure_ascii=False, indent=2))
++
++
++if __name__ == "__main__":
++    main()
+--- original/scripts/inspect_iceberg.py
++++ v2/scripts/inspect_iceberg.py
+@@ -0,0 +1,44 @@
++"""Verify actual table snapshots and time-travel reads for a successful run."""
++import argparse
++import json
++from pathlib import Path
++from pyspark.sql import SparkSession
++
++parser = argparse.ArgumentParser(description=__doc__)
++parser.add_argument('--run', type=Path, required=True)
++parser.add_argument('--warehouse', required=True)
++parser.add_argument('--output', type=Path, required=True)
++args = parser.parse_args()
++manifest = json.loads((args.run / 'manifest.json').read_text(encoding='utf-8'))
++if manifest['format'] != 'iceberg' or manifest['status'] != 'success' or not (args.run / '_SUCCESS').exists():
++    raise ValueError('Expected a published, successful Iceberg run')
++spark = (SparkSession.builder.appName('inspect-iceberg-snapshots').master('local[2]')
++         .config('spark.sql.extensions', 'org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions')
++         .config('spark.sql.catalog.local', 'org.apache.iceberg.spark.SparkCatalog')
++         .config('spark.sql.catalog.local.type', 'hadoop')
++         .config('spark.sql.catalog.local.warehouse', args.warehouse).getOrCreate())
++spark.sparkContext.setLogLevel('WARN')
++try:
++    tables = {}
++    for name, entry in manifest['tables'].items():
++        table = entry['table']
++        snapshots = spark.sql(f'SELECT snapshot_id FROM {table}.snapshots ORDER BY committed_at').collect()
++        snapshot_id = entry['snapshot_id']
++        if snapshot_id not in [int(row.snapshot_id) for row in snapshots]:
++            raise AssertionError(f'Manifest snapshot not found for {table}')
++        current_count = spark.table(table).count()
++        version_count = spark.sql(f'SELECT COUNT(*) AS n FROM {table} VERSION AS OF {snapshot_id}').first().n
++        oldest_id = int(snapshots[0].snapshot_id)
++        oldest_count = spark.sql(f'SELECT COUNT(*) AS n FROM {table} VERSION AS OF {oldest_id}').first().n
++        if current_count != version_count:
++            raise AssertionError('Published snapshot and current table counts differ')
++        tables[name] = {'table': table, 'snapshot_count': len(snapshots), 'manifest_snapshot': snapshot_id,
++                        'current_rows': current_count, 'manifest_snapshot_rows': version_count,
++                        'oldest_snapshot': oldest_id, 'oldest_snapshot_rows': oldest_count}
++    report = {'status': 'PASS', 'tables': tables,
++              'scope': 'Actual Iceberg snapshot metadata and VERSION AS OF SQL reads; no cross-table transaction claimed'}
++    args.output.parent.mkdir(parents=True, exist_ok=True)
++    args.output.write_text(json.dumps(report, indent=2), encoding='utf-8')
++    print(json.dumps(report, indent=2))
++finally:
++    spark.stop()
+--- original/scripts/run-local.ps1
++++ v2/scripts/run-local.ps1
+@@ -0,0 +1,65 @@
++[CmdletBinding()]
++param(
++    [string]$PythonCommand = "python",
++    [string]$JavaHome = "",
++    [string]$HadoopHome = "",
++    [string]$IcebergJar = "",
++    [ValidateSet("parquet", "iceberg")][string]$Format = "parquet",
++    [ValidateSet("baseline", "optimized")][string]$Mode = "baseline",
++    [string]$RunId = ("local-" + (Get-Date -Format "yyyyMMddTHHmmss")),
++    [string]$InputPath = "data/facebook_combined.txt.gz",
++    [string]$OutputPath = "artifacts/local",
++    [string]$Master = "local[2]",
++    [int]$Partitions = 4,
++    [int]$TopK = 10,
++    [long]$MaxWedges = 50000000,
++    [ValidateSet("", "clean", "score")][string]$FailAfter = ""
++)
++
++$ErrorActionPreference = "Stop"
++$projectRoot = Split-Path -Parent $PSScriptRoot
++$pythonExecutable = (Get-Command -Name $PythonCommand -CommandType Application -ErrorAction Stop).Source
++$managedVariables = @("JAVA_HOME", "HADOOP_HOME", "PATH", "PYSPARK_PYTHON", "PYSPARK_DRIVER_PYTHON", "PYSPARK_SUBMIT_ARGS", "SPARK_LOCAL_IP")
++$previousEnvironment = @{}
++foreach ($variableName in $managedVariables) {
++    $previousEnvironment[$variableName] = [Environment]::GetEnvironmentVariable($variableName, "Process")
++}
++
++Push-Location -LiteralPath $projectRoot
++try {
++    if ($JavaHome) {
++        $resolvedJava = (Resolve-Path -LiteralPath $JavaHome).Path
++        if (-not (Test-Path -LiteralPath (Join-Path $resolvedJava "bin/java.exe"))) {
++            throw "JavaHome must contain bin/java.exe (Java 17 recommended)."
++        }
++        $env:JAVA_HOME = $resolvedJava
++        $env:PATH = (Join-Path $resolvedJava "bin") + [IO.Path]::PathSeparator + $env:PATH
++    }
++    if ($HadoopHome) {
++        $resolvedHadoop = (Resolve-Path -LiteralPath $HadoopHome).Path
++        $env:HADOOP_HOME = $resolvedHadoop
++        $env:PATH = (Join-Path $resolvedHadoop "bin") + [IO.Path]::PathSeparator + $env:PATH
++    }
++    $env:PYSPARK_PYTHON = $pythonExecutable
++    $env:PYSPARK_DRIVER_PYTHON = $pythonExecutable
++    if ($Master -like "local*") { $env:SPARK_LOCAL_IP = "127.0.0.1" }
++    $pipelineArguments = @("src/spark_pipeline.py", "--input", $InputPath, "--output", $OutputPath,
++                          "--run-id", $RunId, "--master", $Master, "--partitions", "$Partitions",
++                          "--k", "$TopK", "--max-wedges", "$MaxWedges", "--format", $Format, "--mode", $Mode)
++    if ($IcebergJar) {
++        $resolvedJar = (Resolve-Path -LiteralPath $IcebergJar).Path.Replace("\", "/")
++        # PySpark parses this string with shlex; forward slashes and quoting
++        # preserve Windows paths containing spaces. No shell evaluation occurs.
++        $env:PYSPARK_SUBMIT_ARGS = '--jars "' + $resolvedJar + '" pyspark-shell'
++        $pipelineArguments += "--iceberg-package="
++    }
++    if ($FailAfter) { $pipelineArguments += @("--fail-after", $FailAfter) }
++    & $pythonExecutable @pipelineArguments
++    if ($LASTEXITCODE -ne 0) { throw "Spark pipeline exited with code $LASTEXITCODE. Inspect the unpublished staging failure.json and event log." }
++}
++finally {
++    foreach ($variableName in $managedVariables) {
++        [Environment]::SetEnvironmentVariable($variableName, $previousEnvironment[$variableName], "Process")
++    }
++    Pop-Location
++}
+--- original/scripts/verify_results.py
++++ v2/scripts/verify_results.py
+@@ -0,0 +1,110 @@
++"""Independently check published Parquet runs against each other and Python sets."""
++from __future__ import annotations
++
++import argparse
++from decimal import Decimal, ROUND_HALF_EVEN
++import json
++from pathlib import Path
++import random
++import sys
++
++import pandas as pd
++import numpy as np
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++from src.experiment import METHODS, adjacency, candidate_scores, load_edges, score_pair
++
++
++def rounded(value):
++    return Decimal(str(value)).quantize(Decimal('0.000000000001'), rounding=ROUND_HALF_EVEN)
++
++
++def require_integer_keys(frame, columns, table_name):
++    """Never coerce graph IDs through float64 (which loses int64 IDs > 2**53)."""
++    for column in columns:
++        if not pd.api.types.is_integer_dtype(frame[column].dtype) or frame[column].isna().any():
++            raise AssertionError(f'{table_name}.{column} must be a nonmissing integer column')
++
++
++def verify(input_path, first, second, user_samples=64, pair_samples=1000):
++    manifests = []
++    for path in (first, second):
++        if not (path / '_SUCCESS').is_file():
++            raise ValueError(f'Not a published successful run: {path}')
++        manifest = json.loads((path / 'manifest.json').read_text(encoding='utf-8'))
++        if manifest.get('status') != 'success' or manifest.get('format') != 'parquet':
++            raise ValueError(f'Expected a successful Parquet run: {path}')
++        manifests.append(manifest)
++    if manifests[0]['k'] != manifests[1]['k'] or manifests[0].get('tie_policy') != manifests[1].get('tie_policy'):
++        raise AssertionError('Runs must use the same k and tie policy')
++    left = pd.read_parquet(first / 'tables/candidate_scores').sort_values(['left', 'right'], kind='mergesort').reset_index(drop=True)
++    right = pd.read_parquet(second / 'tables/candidate_scores').sort_values(['left', 'right'], kind='mergesort').reset_index(drop=True)
++    for frame in (left, right):
++        require_integer_keys(frame, ['left', 'right', 'common_neighbors'], 'candidate_scores')
++        if frame.duplicated(['left', 'right']).any() or (frame['left'] >= frame['right']).any():
++            raise AssertionError('Candidate keys must be unique canonical pairs')
++        if not np.isfinite(frame[list(METHODS)].to_numpy(dtype=float)).all():
++            raise AssertionError('Candidate scores must be finite')
++    pd.testing.assert_frame_equal(left[['left', 'right']], right[['left', 'right']])
++    errors = {}
++    for method in METHODS:
++        np.testing.assert_allclose(left[method], right[method], atol=1e-12, rtol=1e-12)
++        errors[method] = float(np.max(np.abs(left[method].to_numpy() - right[method].to_numpy()), initial=0))
++    rank_keys = ['user', 'method', 'rank']
++    top_a = pd.read_parquet(first / 'tables/recommendations').sort_values(rank_keys, kind='mergesort').reset_index(drop=True)
++    top_b = pd.read_parquet(second / 'tables/recommendations').sort_values(rank_keys, kind='mergesort').reset_index(drop=True)
++    for frame in (top_a, top_b):
++        require_integer_keys(frame, ['user', 'candidate', 'rank'], 'recommendations')
++        if frame.duplicated(rank_keys).any() or frame.duplicated(['user', 'method', 'candidate']).any():
++            raise AssertionError('Recommendation rank/candidate keys must be unique')
++        if not frame['method'].isin(METHODS).all() or not frame['rank'].between(1, manifests[0]['k']).all():
++            raise AssertionError('Recommendation method/rank violates its contract')
++    pd.testing.assert_frame_equal(top_a[rank_keys + ['candidate']], top_b[rank_keys + ['candidate']])
++    nodes, edges = load_edges(input_path)
++    graph = adjacency(nodes, edges)
++    rng = random.Random(42)
++    sampled_indices = rng.sample(range(len(left)), min(pair_samples, len(left)))
++    max_reference_error = 0.0
++    for index in sampled_indices:
++        # iloc[index] creates a mixed numeric Series and silently promotes int64
++        # IDs to float64. Select each ID from its original typed column instead.
++        left_id = int(left['left'].iat[index])
++        right_id = int(left['right'].iat[index])
++        expected = score_pair(graph, left_id, right_id)
++        for method in METHODS:
++            value = float(left[method].iat[index])
++            np.testing.assert_allclose(value, expected[method], atol=1e-12, rtol=1e-12)
++            max_reference_error = max(max_reference_error, abs(value - expected[method]))
++    k = manifests[0]['k']
++    sampled_users = rng.sample(sorted(nodes), min(user_samples, len(nodes)))
++    for user in sampled_users:
++        scores = candidate_scores(graph, user)
++        for method in METHODS:
++            expected = sorted(scores[method], key=lambda candidate: (-rounded(scores[method][candidate]), candidate))[:k]
++            actual = top_a.loc[(top_a['user'] == user) & (top_a['method'] == method)].sort_values('rank')['candidate'].tolist()
++            if expected != actual:
++                raise AssertionError(f'Top-K differs for user={user}, method={method}: {expected} != {actual}')
++    return {'status': 'PASS', 'candidate_pairs_compared_between_modes': len(left),
++            'recommendation_rows_compared_between_modes': len(top_a),
++            'max_score_error_between_modes': errors,
++            'independent_reference_pairs': len(sampled_indices),
++            'independent_reference_users': len(sampled_users),
++            'max_reference_score_error': max_reference_error,
++            'pair_tolerance': {'atol': 1e-12, 'rtol': 1e-12},
++            'topk_tie_policy': 'HALF_EVEN score quantized to 12 decimal places, then candidate ID',
++            'validation_scope': 'Local pandas loads both result tables and the input graph; score equivalence is full-table, independent Python reference checks are sampled',
++            'first_run': str(first), 'second_run': str(second),
++            'pandas': pd.__version__, 'numpy': np.__version__}
++
++
++if __name__ == '__main__':
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--input', required=True, type=Path)
++    parser.add_argument('--first-run', required=True, type=Path)
++    parser.add_argument('--second-run', required=True, type=Path)
++    parser.add_argument('--output', required=True, type=Path)
++    args = parser.parse_args()
++    report = verify(args.input, args.first_run, args.second_run)
++    args.output.parent.mkdir(parents=True, exist_ok=True)
++    args.output.write_text(json.dumps(report, indent=2), encoding='utf-8')
++    print(json.dumps(report, indent=2))
+--- original/sql/data_contracts.sql
++++ v2/sql/data_contracts.sql
+@@ -0,0 +1,20 @@
++-- Each query should return zero rows. Register the corresponding output table
++-- as clean_edges, adjacency, candidate_scores, recommendations before executing.
++SELECT left, right, COUNT(*) AS duplicates
++FROM clean_edges
++GROUP BY left, right
++HAVING COUNT(*) > 1 OR left < 0 OR left >= right;
++
++SELECT c.left, c.right
++FROM candidate_scores c
++INNER JOIN clean_edges e ON c.left = e.left AND c.right = e.right;
++
++SELECT user, method, rank, COUNT(*) AS duplicates
++FROM recommendations
++GROUP BY user, method, rank
++HAVING COUNT(*) > 1 OR rank < 1;
++
++SELECT user, method, candidate, COUNT(*) AS duplicates
++FROM recommendations
++GROUP BY user, method, candidate
++HAVING COUNT(*) > 1 OR user = candidate;
+--- original/sql/inspect_iceberg.sql
++++ v2/sql/inspect_iceberg.sql
+@@ -0,0 +1,16 @@
++-- Replace the complete table identifier using tables.<name>.table in manifest.json.
++-- Run with the same local HadoopCatalog and warehouse configuration as the pipeline.
++SELECT user, method, candidate, score, ranking_score, rank
++FROM local.friend_recommendation.REPLACE_WITH_RUN_RECOMMENDATIONS_TABLE
++WHERE user = 0
++ORDER BY method, rank;
++
++-- Snapshot metadata is available only for Iceberg, not the default Parquet files.
++SELECT snapshot_id, committed_at, operation, summary
++FROM local.friend_recommendation.REPLACE_WITH_RUN_RECOMMENDATIONS_TABLE.snapshots
++ORDER BY committed_at DESC;
++
++-- Use the exact recorded snapshot_id to inspect the committed version.
++SELECT COUNT(*)
++FROM local.friend_recommendation.REPLACE_WITH_RUN_RECOMMENDATIONS_TABLE
++VERSION AS OF 1234567890123456789;
+--- original/src/eventlog_metrics.py
++++ v2/src/eventlog_metrics.py
+@@ -0,0 +1,346 @@
++"""Summarize actual Spark JSON event logs without double-counting retries.
++
++Run: python -m src.eventlog_metrics --input EVENT_LOG --output metrics.json
++Only Python's standard library is required. Plain JSON-lines and gzip logs are
++supported; pass a rolling-log directory to read its events_* segments.
++"""
++
++from __future__ import annotations
++
++import argparse
++import gzip
++import json
++import math
++import re
++from collections import Counter
++from pathlib import Path
++from typing import Any
++
++
++COUNTERS = (
++    "shuffle_read_bytes", "shuffle_write_bytes", "shuffle_read_records",
++    "shuffle_write_records", "memory_spill_bytes", "disk_spill_bytes",
++    "executor_run_time_ms", "executor_cpu_time_ns", "jvm_gc_time_ms",
++    "shuffle_fetch_wait_time_ms", "shuffle_write_time_ns",
++)
++OUTCOMES = ("success", "failed", "killed", "unknown")
++
++
++def percentile(values: list[float], probability: float) -> float | None:
++    """Linearly interpolated quantile (R-7 / numpy's default method)."""
++    if not values:
++        return None
++    ordered = sorted(values)
++    position = (len(ordered) - 1) * probability
++    lower, upper = math.floor(position), math.ceil(position)
++    return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
++
++
++def _files(path: Path) -> list[Path]:
++    if path.is_file():
++        return [path]
++    if not path.is_dir():
++        raise ValueError(f"Event log does not exist: {path}")
++    segments = [p for p in path.iterdir() if p.is_file() and p.name.startswith("events_")
++                and not p.name.endswith(".crc")]
++    if not segments:
++        raise ValueError("Directory must contain Spark rolling-log events_* segments; "
++                         "otherwise pass a single event-log file")
++    def segment_order(item: Path) -> tuple[int, str]:
++        match = re.match(r"events_(\d+)", item.name)
++        return (int(match.group(1)) if match else 0, item.name)
++    return sorted(segments, key=segment_order)
++
++
++def _events(path: Path):
++    with path.open("rb") as raw:
++        compressed = raw.read(2) == b"\x1f\x8b"
++    opener = gzip.open if compressed else open
++    with opener(path, "rt", encoding="utf-8-sig") as handle:
++        for line_number, line in enumerate(handle, 1):
++            if not line.strip():
++                continue
++            try:
++                event = json.loads(line)
++            except (ValueError, UnicodeError) as error:
++                raise ValueError(f"{path}:{line_number}: invalid JSON event; "
++                                 "use an uncompressed or gzip Spark JSON log") from error
++            if not isinstance(event, dict) or "Event" not in event:
++                raise ValueError(f"{path}:{line_number}: not a Spark JSON event")
++            yield event
++
++
++def _number(value: Any) -> int:
++    return int(value) if isinstance(value, (int, float)) and math.isfinite(value) else 0
++
++
++def _task(event: dict[str, Any]) -> dict[str, Any]:
++    info = event.get("Task Info", {})
++    metrics = event.get("Task Metrics") or {}
++    read = metrics.get("Shuffle Read Metrics") or {}
++    write = metrics.get("Shuffle Write Metrics") or {}
++    reason = event.get("Task End Reason", {})
++    reason = reason.get("Reason", "unknown") if isinstance(reason, dict) else str(reason)
++    if reason == "Success":
++        outcome = "success"
++    elif reason in ("TaskKilled", "Killed") or info.get("Killed"):
++        outcome = "killed"
++    elif reason == "unknown":
++        outcome = "unknown"
++    else:
++        outcome = "failed"
++    launch, finish = info.get("Launch Time"), info.get("Finish Time")
++    duration = (finish - launch if isinstance(launch, (int, float)) and
++                isinstance(finish, (int, float)) and finish >= launch else None)
++    task_id = info.get("Task ID")
++    if task_id is None or "Stage ID" not in event:
++        raise ValueError("SparkListenerTaskEnd must have Stage ID and Task Info.Task ID")
++    partition = info.get("Partition ID", info.get("Index"))
++    return {
++        "stage_id": int(event["Stage ID"]),
++        "stage_attempt_id": int(event.get("Stage Attempt ID", 0)),
++        "task_id": int(task_id), "partition_index": partition,
++        "attempt": int(info.get("Attempt", 0)), "outcome": outcome,
++        "reason": reason, "speculative": bool(info.get("Speculative", False)),
++        "finish_time_ms": _number(finish), "duration_ms": duration,
++        "metrics_present": bool(metrics),
++        "shuffle_read_bytes": _number(read.get("Remote Bytes Read")) + _number(read.get("Local Bytes Read")),
++        "shuffle_write_bytes": _number(write.get("Shuffle Bytes Written")),
++        "shuffle_read_records": _number(read.get("Total Records Read")),
++        "shuffle_write_records": _number(write.get("Shuffle Records Written")),
++        "memory_spill_bytes": _number(metrics.get("Memory Bytes Spilled")),
++        "disk_spill_bytes": _number(metrics.get("Disk Bytes Spilled")),
++        "executor_run_time_ms": _number(metrics.get("Executor Run Time")),
++        "executor_cpu_time_ns": _number(metrics.get("Executor CPU Time")),
++        "jvm_gc_time_ms": _number(metrics.get("JVM GC Time")),
++        "shuffle_fetch_wait_time_ms": _number(read.get("Fetch Wait Time")),
++        "shuffle_write_time_ns": _number(write.get("Shuffle Write Time")),
++    }
++
++
++def _aggregate(tasks: list[dict[str, Any]]) -> dict[str, Any]:
++    durations = [task["duration_ms"] for task in tasks if task["outcome"] == "success"
++                 and task["duration_ms"] is not None]
++    return {
++        "task_attempt_count": len(tasks),
++        **{key: sum(task[key] for task in tasks) for key in COUNTERS},
++        "successful_task_duration_ms": {
++            "count": len(durations), "p50": percentile(durations, 0.5),
++            "p95": percentile(durations, 0.95),
++            "max": max(durations) if durations else None,
++        },
++    }
++
++
++def _by_outcome(tasks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
++    return {outcome: _aggregate([task for task in tasks if task["outcome"] == outcome])
++            for outcome in OUTCOMES}
++
++
++def summarize_event_logs(path: str | Path) -> dict[str, Any]:
++    inputs = _files(Path(path))
++    stages: dict[tuple[int, int], dict[str, Any]] = {}
++    jobs: dict[int, dict[str, Any]] = {}
++    tasks: dict[tuple[int, int, int], dict[str, Any]] = {}
++    application_ids: set[str] = set()
++    event_counts: Counter[str] = Counter()
++    duplicate_task_events = 0
++    app_ended = False
++    app_name = None
++
++    def stage(stage_id: int, attempt: int) -> dict[str, Any]:
++        return stages.setdefault((stage_id, attempt), {
++            "stage_id": stage_id, "attempt_id": attempt, "name": None,
++            "status": "unknown", "submitted_time_ms": None,
++            "completion_time_ms": None, "failure_reason": None,
++            "expected_tasks": None, "job_group_id": None,
++            "job_group_source": None,
++        })
++
++    for file_path in inputs:
++        for event in _events(file_path):
++            kind = event["Event"]
++            event_counts[kind] += 1
++            if kind == "SparkListenerApplicationStart":
++                if event.get("App ID") is not None:
++                    application_ids.add(str(event["App ID"]))
++                    if len(application_ids) > 1:
++                        raise ValueError("Input contains multiple Spark applications; summarize each separately")
++                app_name = event.get("App Name", app_name)
++            elif kind == "SparkListenerApplicationEnd":
++                app_ended = True
++            elif kind == "SparkListenerJobStart":
++                job_id = int(event["Job ID"])
++                entry = jobs.setdefault(job_id, {"job_id": job_id, "status": "unknown"})
++                entry.update({"stage_ids": sorted(set(event.get("Stage IDs", []))),
++                              "submission_time_ms": event.get("Submission Time")})
++                properties = event.get("Properties") or {}
++                entry.update({"job_group_id": properties.get("spark.jobGroup.id"),
++                              "description": properties.get("spark.job.description"),
++                              "sql_execution_id": properties.get("spark.sql.execution.id")})
++            elif kind == "SparkListenerJobEnd":
++                job_id = int(event["Job ID"])
++                entry = jobs.setdefault(job_id, {"job_id": job_id, "stage_ids": []})
++                result = event.get("Job Result", {})
++                result = result.get("Result", "unknown") if isinstance(result, dict) else str(result)
++                entry.update({"status": "success" if result == "JobSucceeded" else
++                              "failed" if result == "JobFailed" else "unknown",
++                              "completion_time_ms": event.get("Completion Time"), "result": result})
++            elif kind in ("SparkListenerStageSubmitted", "SparkListenerStageCompleted"):
++                info = event["Stage Info"]
++                entry = stage(int(info["Stage ID"]), int(info.get("Stage Attempt ID", 0)))
++                properties = event.get("Properties") or {}
++                if kind == "SparkListenerStageSubmitted" and properties.get("spark.jobGroup.id") is not None:
++                    entry["job_group_id"] = properties["spark.jobGroup.id"]
++                    entry["job_group_source"] = "StageSubmitted.Properties"
++                entry.update({"name": info.get("Stage Name", entry["name"]),
++                              "expected_tasks": info.get("Number of Tasks", entry["expected_tasks"])})
++                if info.get("Submission Time") is not None:
++                    entry["submitted_time_ms"] = info["Submission Time"]
++                if kind == "SparkListenerStageCompleted":
++                    failure = info.get("Failure Reason")
++                    entry.update({"status": "failed" if failure else "success",
++                                  "failure_reason": failure,
++                                  "completion_time_ms": info.get("Completion Time")})
++                elif entry["status"] == "unknown":
++                    entry["status"] = "running"
++            elif kind == "SparkListenerTaskEnd":
++                task = _task(event)
++                key = (task["stage_id"], task["stage_attempt_id"], task["task_id"])
++                if key in tasks:
++                    if tasks[key] != task:
++                        raise ValueError(f"Conflicting TaskEnd events for stage/attempt/task {key}")
++                    duplicate_task_events += 1
++                else:
++                    tasks[key] = task
++                stage(task["stage_id"], task["stage_attempt_id"])
++
++    if not event_counts:
++        raise ValueError("No Spark events found")
++    all_tasks = list(tasks.values())
++    for entry in stages.values():
++        if entry["job_group_id"] is None:
++            referencing_groups = {job.get("job_group_id") for job in jobs.values()
++                                  if entry["stage_id"] in job.get("stage_ids", [])
++                                  and job.get("job_group_id") is not None}
++            if len(referencing_groups) == 1:
++                entry["job_group_id"] = next(iter(referencing_groups))
++                entry["job_group_source"] = "unambiguous referencing JobStart.Properties"
++    # A repeated stage can reuse valid outputs from an earlier failed attempt.
++    # For each completed stage ID, select the latest observed success per
++    # partition up to its final successful attempt; ties choose earliest finish.
++    successful_stage_attempts: dict[int, int] = {}
++    for entry in stages.values():
++        if entry["status"] == "success":
++            successful_stage_attempts[entry["stage_id"]] = max(
++                successful_stage_attempts.get(entry["stage_id"], -1), entry["attempt_id"])
++    selected: dict[tuple[int, Any], dict[str, Any]] = {}
++    missing_partition_count = 0
++    for task in all_tasks:
++        if task["outcome"] != "success" or task["stage_id"] not in successful_stage_attempts:
++            continue
++        if task["stage_attempt_id"] > successful_stage_attempts[task["stage_id"]]:
++            continue
++        if task["partition_index"] is None:
++            missing_partition_count += 1
++            continue
++        key = (task["stage_id"], task["partition_index"])
++        previous = selected.get(key)
++        preference = lambda item: (-item["stage_attempt_id"], item["finish_time_ms"], item["task_id"])
++        if previous is None or preference(task) < preference(previous):
++            selected[key] = task
++    logical_tasks = list(selected.values())
++    stage_rows = []
++    for key, entry in sorted(stages.items()):
++        subset = [task for task in all_tasks
++                  if (task["stage_id"], task["stage_attempt_id"]) == key]
++        stage_rows.append({**entry, "all_attempts": _aggregate(subset),
++                           "by_task_outcome": _by_outcome(subset),
++                           "failure_reasons": dict(Counter(task["reason"] for task in subset
++                                                           if task["outcome"] != "success"))})
++    job_rows = []
++    for _, entry in sorted(jobs.items()):
++        ids = set(entry.get("stage_ids", []))
++        subset = [task for task in all_tasks if task["stage_id"] in ids]
++        logical_subset = [task for task in logical_tasks if task["stage_id"] in ids]
++        job_rows.append({**entry, "all_attempts": _aggregate(subset),
++                         "by_task_outcome": _by_outcome(subset),
++                         "logical_successful_tasks": _aggregate(logical_subset)})
++    # Phase accounting assigns each *executed stage attempt* to its submission
++    # group, rather than adding job metrics whose referenced stages can overlap.
++    group_rows = []
++    groups = {entry["job_group_id"] for entry in stages.values()}
++    for group_id in sorted(groups, key=lambda value: (value is None, str(value))):
++        entries = [entry for entry in stages.values() if entry["job_group_id"] == group_id]
++        keys = {(entry["stage_id"], entry["attempt_id"]) for entry in entries}
++        subset = [task for task in all_tasks if (task["stage_id"], task["stage_attempt_id"]) in keys]
++        logical_subset = [task for task in logical_tasks if (task["stage_id"], task["stage_attempt_id"]) in keys]
++        group_jobs = [entry for entry in jobs.values() if entry.get("job_group_id") == group_id]
++        submitted = [entry["submitted_time_ms"] for entry in entries if entry["submitted_time_ms"] is not None]
++        completed = [entry["completion_time_ms"] for entry in entries if entry["completion_time_ms"] is not None]
++        group_rows.append({
++            "job_group_id": group_id, "job_ids": sorted(entry["job_id"] for entry in group_jobs),
++            "job_counts": dict(Counter(entry["status"] for entry in group_jobs)),
++            "stage_attempt_counts": dict(Counter(entry["status"] for entry in entries)),
++            "stage_attempts": [[entry["stage_id"], entry["attempt_id"]] for entry in entries],
++            "observed_stage_window_ms": max(completed) - min(submitted) if submitted and completed else None,
++            "all_attempts": _aggregate(subset), "by_task_outcome": _by_outcome(subset),
++            "logical_successful_tasks": _aggregate(logical_subset),
++        })
++    warnings = []
++    if not app_ended:
++        warnings.append("No ApplicationEnd event: log may be live, truncated, or filtered; metrics are observed lower bounds.")
++    if missing_partition_count:
++        warnings.append(f"Excluded {missing_partition_count} successful tasks without partition/index from logical totals.")
++    if any(not task["metrics_present"] for task in all_tasks):
++        warnings.append("Some TaskEnd events have no Task Metrics; unavailable resource counters are zero, not proof of no cost.")
++    return {
++        "schema_version": 1, "application_ids": sorted(application_ids),
++        "application_name": app_name, "application_end_observed": app_ended,
++        "input_files": [str(item.resolve()) for item in inputs],
++        "counting_policy": {
++            "all_attempts": "Sum every distinct (stage ID, stage attempt ID, task ID) TaskEnd once; includes failed, killed and speculative attempts and unsuccessful stages.",
++            "logical_successful_tasks": "Observed approximation: for each successfully completed stage ID and partition, select the highest stage attempt not later than its last successful completion, then earliest successful finish/task ID. This includes reusable earlier-attempt outputs and excludes duplicate speculative successes; it is not a measurement of bytes physically saved.",
++            "jobs": "Job metrics include referenced stage IDs; shared/reused stages can appear in multiple jobs. Job totals are NOT additive. Application totals count stages only once.",
++            "job_groups": "Each executed stage attempt is assigned to its StageSubmitted.Properties spark.jobGroup.id, falling back only to one unambiguous referencing JobStart group. Group resources are disjoint across stage attempts; jobs are NOT summed. observed_stage_window_ms is the first stage submission to last completion, not Python pipeline wall time.",
++            "duration": "Finish Time minus Launch Time, milliseconds; p50/p95 use linear interpolation and successful attempts only.",
++            "shuffle_read": "Remote Bytes Read + Local Bytes Read; Remote Bytes Read To Disk is a subset and is not added twice.",
++            "units": "Bytes and records are integers; executor CPU and shuffle-write time are nanoseconds; executor run, GC, fetch wait and task duration are milliseconds.",
++            "missing_metrics": "Absent resource counters contribute zero; inspect warnings and tasks_missing_metrics before treating totals as complete.",
++        },
++        "event_counts": dict(event_counts), "warnings": warnings,
++        "duplicate_task_end_events_ignored": duplicate_task_events,
++        "summary": {
++            "job_counts": dict(Counter(entry["status"] for entry in jobs.values())),
++            "stage_attempt_counts": dict(Counter(entry["status"] for entry in stages.values())),
++            "task_outcome_counts": dict(Counter(task["outcome"] for task in all_tasks)),
++            "failed_task_attempts": sum(task["outcome"] == "failed" for task in all_tasks),
++            "killed_task_attempts": sum(task["outcome"] == "killed" for task in all_tasks),
++            "retried_task_attempts": sum(task["attempt"] > 0 for task in all_tasks),
++            "speculative_task_attempts": sum(task["speculative"] for task in all_tasks),
++            "tasks_missing_metrics": sum(not task["metrics_present"] for task in all_tasks),
++            "all_attempts": _aggregate(all_tasks), "by_task_outcome": _by_outcome(all_tasks),
++            "logical_successful_tasks": _aggregate(logical_tasks),
++        },
++        "jobs": job_rows, "stage_attempts": stage_rows, "job_groups": group_rows,
++    }
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--input", type=Path, required=True, help="JSON/gzip event log or rolling events_* directory")
++    parser.add_argument("--output", type=Path, required=True)
++    args = parser.parse_args()
++    try:
++        result = summarize_event_logs(args.input)
++    except (OSError, ValueError) as error:
++        parser.error(str(error))
++    if str(args.output.resolve()) in result["input_files"]:
++        parser.error("--output must not overwrite an input event log")
++    args.output.parent.mkdir(parents=True, exist_ok=True)
++    args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
++    print(f"Saved Spark event-log metrics to {args.output}")
++
++
++if __name__ == "__main__":
++    main()
+--- original/src/experiment.py
++++ v2/src/experiment.py
+@@ -21,10 +21,16 @@
+     nodes: set[int] = set()
+     edges: set[tuple[int, int]] = set()
+     with opener(path, "rt", encoding="utf-8") as handle:
+-        for line in handle:
+-            if not line.strip() or line.startswith("#"):
++        for line_number, line in enumerate(handle, start=1):
++            if not line.strip() or line.lstrip().startswith("#"):
+                 continue
+-            left, right = map(int, line.split()[:2])
++            fields = line.split()
++            try:
++                if len(fields) < 2:
++                    raise ValueError("expected two node IDs")
++                left, right = map(int, fields[:2])
++            except ValueError as error:
++                raise ValueError(f"{path}:{line_number}: invalid edge: {line.strip()!r}") from error
+             if left == right:
+                 continue
+             edge = (left, right) if left < right else (right, left)
+@@ -61,12 +67,25 @@
+ def split_edges(
+     nodes: set[int], edges: list[tuple[int, int]], seed: int, test_fraction: float
+ ) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
++    if not nodes:
++        raise ValueError("Cannot split an empty graph")
++    if not math.isfinite(test_fraction) or not 0.0 < test_fraction < 1.0:
++        raise ValueError("test_fraction must be strictly between zero and one")
++    if any(left not in nodes or right not in nodes or left == right for left, right in edges):
++        raise ValueError("Edges must connect two distinct nodes in nodes")
++    # Treat undirected duplicates/orientations consistently before protecting a tree.
++    edges = sorted({tuple(sorted(edge)) for edge in edges})
+     full_graph = adjacency(nodes, edges)
+     protected = spanning_tree_edges(full_graph, min(nodes))
+     removable = [edge for edge in edges if edge not in protected]
+     rng = random.Random(seed)
+     rng.shuffle(removable)
+     test_size = round(len(edges) * test_fraction)
++    if not 1 <= test_size <= len(removable):
++        raise ValueError(
++            f"Requested {test_size} held-out edges; a nonempty connected split allows "
++            f"at most {len(removable)}. Change test_fraction or use a graph with cycles."
++        )
+     test_edges = removable[:test_size]
+     test_set = set(test_edges)
+     train_edges = [edge for edge in edges if edge not in test_set]
+@@ -88,14 +107,46 @@
+ def sample_negative_edges(
+     nodes: set[int], full_edges: set[tuple[int, int]], count: int, seed: int
+ ) -> list[tuple[int, int]]:
++    if not isinstance(count, int) or count < 0:
++        raise ValueError("count must be a nonnegative integer")
++    forbidden = {
++        tuple(sorted((left, right))) for left, right in full_edges
++        if left in nodes and right in nodes and left != right
++    }
++    available = len(nodes) * (len(nodes) - 1) // 2 - len(forbidden)
++    if count > available:
++        raise ValueError(f"Requested {count} negatives, but only {available} non-edges exist")
++    if count == 0:
++        return []
+     rng = random.Random(seed)
+     node_list = sorted(nodes)
+     negatives: set[tuple[int, int]] = set()
+-    while len(negatives) < count:
++    # Rejection sampling is cheap for sparse graphs. Bound it so dense graphs or
++    # requests near the complement size cannot hang; reservoir-sample the rest.
++    for _ in range(max(100, 20 * count)):
++        if len(negatives) == count:
++            break
+         left, right = rng.sample(node_list, 2)
+         edge = (left, right) if left < right else (right, left)
+-        if edge not in full_edges:
++        if edge not in forbidden:
+             negatives.add(edge)
++    if len(negatives) < count:
++        remaining = count - len(negatives)
++        reservoir: list[tuple[int, int]] = []
++        seen = 0
++        for index, left in enumerate(node_list):
++            for right in node_list[index + 1:]:
++                edge = (left, right)
++                if edge in forbidden or edge in negatives:
++                    continue
++                seen += 1
++                if len(reservoir) < remaining:
++                    reservoir.append(edge)
++                else:
++                    slot = rng.randrange(seen)
++                    if slot < remaining:
++                        reservoir[slot] = edge
++        negatives.update(reservoir)
+     return sorted(negatives)
+ 
+ 
+@@ -103,24 +154,41 @@
+     graph: dict[int, set[int]], full_edges: set[tuple[int, int]], count: int, seed: int
+ ) -> list[tuple[int, int]]:
+     """Sample non-edges that share at least one neighbor in the training graph."""
+-    packing_base = max(graph) + 1
+-    packed_candidates: set[int] = set()
++    if not isinstance(count, int) or count < 0:
++        raise ValueError("count must be a nonnegative integer")
++    if count == 0:
++        return []
++    forbidden = {tuple(sorted(edge)) for edge in full_edges}
++    candidates: set[tuple[int, int]] = set()
+     for neighbors in graph.values():
+         ordered = sorted(neighbors)
+         for index, left in enumerate(ordered):
+             for right in ordered[index + 1 :]:
+                 edge = (left, right)
+-                if edge not in full_edges:
+-                    packed_candidates.add(left * packing_base + right)
++                if edge not in forbidden:
++                    candidates.add(edge)
++    if count > len(candidates):
++        raise ValueError(f"Requested {count} hard negatives, but only {len(candidates)} exist")
+     rng = random.Random(seed)
+-    chosen = rng.sample(sorted(packed_candidates), count)
+-    return [(value // packing_base, value % packing_base) for value in chosen]
++    return rng.sample(sorted(candidates), count)
++
++
++def _validate_binary_scores(labels: list[int], scores: list[float]) -> None:
++    if len(labels) != len(scores) or not labels:
++        raise ValueError("labels and scores must be nonempty and have equal lengths")
++    if any(label not in (0, 1) for label in labels):
++        raise ValueError("labels must be binary (zero or one)")
++    if any(not math.isfinite(score) for score in scores):
++        raise ValueError("scores must be finite numbers")
+ 
+ 
+ def auc_score(labels: list[int], scores: list[float]) -> float:
++    _validate_binary_scores(labels, scores)
+     ordered = sorted(zip(scores, labels), key=lambda item: item[0])
+     positive_count = sum(labels)
+     negative_count = len(labels) - positive_count
++    if not positive_count or not negative_count:
++        raise ValueError("ROC AUC requires at least one positive and one negative")
+     positive_rank_sum = 0.0
+     index = 0
+     while index < len(ordered):
+@@ -136,14 +204,29 @@
+ 
+ 
+ def average_precision(labels: list[int], scores: list[float]) -> float:
++    """Non-interpolated threshold AP, grouping equal scores (as in sklearn).
++
++    AP = sum over distinct thresholds of delta-recall * precision. Arbitrarily
++    ordering positives before negatives within a tie would inflate this metric.
++    A sample containing no positives has AP zero; empty input is invalid.
++    """
++    _validate_binary_scores(labels, scores)
+     order = sorted(range(len(scores)), key=lambda index: (-scores[index], index))
++    positives = sum(labels)
++    if not positives:
++        return 0.0
+     hits = 0
+     precision_sum = 0.0
+-    for rank, index in enumerate(order, start=1):
+-        if labels[index]:
+-            hits += 1
+-            precision_sum += hits / rank
+-    return precision_sum / max(1, sum(labels))
++    start = 0
++    while start < len(order):
++        end = start + 1
++        while end < len(order) and scores[order[end]] == scores[order[start]]:
++            end += 1
++        new_hits = sum(labels[index] for index in order[start:end])
++        hits += new_hits
++        precision_sum += new_hits * hits / end
++        start = end
++    return precision_sum / positives
+ 
+ 
+ def candidate_scores(graph: dict[int, set[int]], user: int) -> dict[str, dict[int, float]]:
+@@ -176,6 +259,13 @@
+ def ranking_metrics(
+     graph: dict[int, set[int]], test_edges: list[tuple[int, int]], k: int
+ ) -> dict[str, dict[str, float]]:
++    if not isinstance(k, int) or k <= 0:
++        raise ValueError("k must be a positive integer")
++    if not test_edges:
++        raise ValueError("Ranking evaluation requires at least one held-out edge")
++    if any(left not in graph or right not in graph or left == right or right in graph[left]
++           for left, right in test_edges):
++        raise ValueError("Held-out edges must be valid non-edges in the training graph")
+     held_out: dict[int, set[int]] = defaultdict(set)
+     for left, right in test_edges:
+         held_out[left].add(right)
+@@ -203,21 +293,23 @@
+ 
+ 
+ def shuffle_statistics(graph: dict[int, set[int]], partitions: int = 4) -> dict[str, int | float]:
++    """Local wedge-record simulation; these are not measured Spark shuffle bytes."""
++    if not isinstance(partitions, int) or partitions <= 0:
++        raise ValueError("partitions must be a positive integer")
+     naive_emissions = 0
+     local_pairs = [set() for _ in range(partitions)]
+-    packing_base = max(graph) + 1
+     for bridge, neighbors in graph.items():
+         ordered = sorted(neighbors)
+         naive_emissions += len(ordered) * (len(ordered) - 1) // 2
+         bucket = local_pairs[bridge % partitions]
+         for index, left in enumerate(ordered):
+             for right in ordered[index + 1 :]:
+-                bucket.add(left * packing_base + right)
++                bucket.add((left, right))
+     combined_emissions = sum(map(len, local_pairs))
+     return {
+         "naive_wedge_records": naive_emissions,
+         "combiner_records": combined_emissions,
+-        "record_reduction": 1.0 - combined_emissions / naive_emissions,
++        "record_reduction": 1.0 - combined_emissions / naive_emissions if naive_emissions else 0.0,
+         "partitions": partitions,
+     }
+ 
+@@ -271,6 +363,8 @@
+     parser.add_argument("--seeds", type=int, nargs="+", default=[11, 22, 33, 44, 55])
+     parser.add_argument("--test-fraction", type=float, default=0.10)
+     parser.add_argument("--k", type=int, default=10)
++    parser.add_argument("--source-name", default="User-provided undirected edge list")
++    parser.add_argument("--source-url", default=None)
+     args = parser.parse_args()
+     args.output.mkdir(parents=True, exist_ok=True)
+     nodes, edges = load_edges(args.data)
+@@ -295,8 +389,13 @@
+         "seeds": args.seeds,
+         "test_fraction": args.test_fraction,
+         "k": args.k,
+-        "source": "Stanford SNAP ego-Facebook combined graph",
+-        "source_url": "https://snap.stanford.edu/data/ego-Facebook.html",
++        "source": args.source_name,
++        "source_url": args.source_url,
++        "input_file": str(args.data.resolve()),
++        "average_precision_definition": "non-interpolated threshold AP; all equal scores grouped",
++        "ranking_tie_break": "score descending, node ID ascending",
++        "split_protocol": "static hidden-edge evaluation with a protected spanning tree; not temporal forecasting",
++        "shuffle_statistics_type": "local record-count simulation, not measured Spark shuffle bytes",
+     }
+     (args.output / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+ 
+--- original/src/prepare_data.py
++++ v2/src/prepare_data.py
+@@ -0,0 +1,100 @@
++"""Reproducible edge-record sampling and an honest two-hop workload preflight."""
++from __future__ import annotations
++
++import argparse
++import gzip
++import hashlib
++import json
++import math
++import random
++from collections import Counter
++from pathlib import Path
++
++
++def open_text(path):
++    return gzip.open(path, 'rt', encoding='utf-8') if str(path).endswith('.gz') else open(path, encoding='utf-8')
++
++
++def sha256_file(path):
++    digest = hashlib.sha256()
++    with Path(path).open('rb') as handle:
++        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def prepare(source: Path, output: Path, sample_edges: int, seed: int):
++    if sample_edges <= 0:
++        raise ValueError('sample_edges must be positive')
++    if output.exists() or output.with_suffix(output.suffix + '.json').exists():
++        raise FileExistsError(f'Refusing to overwrite sample or metadata: {output}')
++    rng = random.Random(seed)
++    reservoir = []
++    counts = Counter()
++    with open_text(source) as handle:
++        for line in handle:
++            counts['source_lines'] += 1
++            if not line.strip() or line.lstrip().startswith('#'):
++                counts['comment_or_blank'] += 1
++                continue
++            fields = line.split()
++            try:
++                if len(fields) != 2:
++                    raise ValueError('not two columns')
++                left, right = map(int, fields)
++                if min(left, right) < 0 or max(left, right) > 2**63 - 1:
++                    raise ValueError('node outside nonnegative int64')
++            except ValueError:
++                counts['invalid_lines'] += 1
++                continue
++            if left == right:
++                counts['self_loops'] += 1
++                continue
++            counts['valid_edge_records'] += 1
++            edge = (min(left, right), max(left, right))
++            index = counts['valid_edge_records']
++            if len(reservoir) < sample_edges:
++                reservoir.append(edge)
++            else:
++                replace = rng.randrange(index)
++                if replace < sample_edges:
++                    reservoir[replace] = edge
++    edges = sorted(set(reservoir))
++    degrees = Counter()
++    for left, right in edges:
++        degrees[left] += 1
++        degrees[right] += 1
++    wedges = sum(d * (d - 1) // 2 for d in degrees.values())
++    output.parent.mkdir(parents=True, exist_ok=True)
++    with output.open('x', encoding='utf-8', newline='\n') as handle:
++        handle.write('# Uniform reservoir sample of valid input edge records, then deduplicated.\n')
++        for left, right in edges:
++            handle.write(f'{left}\t{right}\n')
++    metadata = {
++        'source': str(source.resolve()),
++        'source_sha256': sha256_file(source),
++        'sampling': 'uniform reservoir of valid edge records; canonicalize and deduplicate sampled records',
++        'seed': seed, 'requested_records': sample_edges, 'source_counts': dict(counts),
++        'sampled_records': len(reservoir), 'unique_edges': len(edges), 'nodes': len(degrees),
++        'max_degree': max(degrees.values(), default=0), 'two_hop_wedge_records': wedges,
++        'top10_degree_wedge_fraction': sum(math.comb(d, 2) for _, d in degrees.most_common(10)) / wedges if wedges else 0,
++        'sample_sha256': sha256_file(output),
++        'limitations': ['Sampled graph metrics do not estimate full-graph recommendation quality.',
++                        'Source is a static graph without real event timestamps.'],
++    }
++    output.with_suffix(output.suffix + '.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
++    return metadata
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--input', type=Path, required=True)
++    parser.add_argument('--output', type=Path, required=True)
++    parser.add_argument('--sample-edges', type=int, default=200_000)
++    parser.add_argument('--seed', type=int, default=42)
++    args = parser.parse_args()
++    print(json.dumps(prepare(args.input, args.output, args.sample_edges, args.seed), indent=2))
++
++
++if __name__ == '__main__':
++    main()
+--- original/src/spark_pipeline.py
++++ v2/src/spark_pipeline.py
+@@ -0,0 +1,449 @@
++"""Distributed, exact two-hop friend recommendation with reviewable run artifacts.
++
++The driver collects only single-row aggregates and table snapshot metadata.  Local
++run directories are atomically published; Iceberg tables are run-specific, and
++the manifest is the publication boundary (not a multi-table transaction).
++"""
++
++from __future__ import annotations
++
++import argparse
++from datetime import datetime, timezone
++import hashlib
++import json
++import os
++from pathlib import Path
++import platform
++import re
++import shutil
++import sys
++import time
++from typing import Any
++
++
++SPARK_VERSION = "3.5.7"
++ICEBERG_PACKAGE = "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.10.0"
++METHODS = ("common_neighbors", "jaccard", "adamic_adar", "resource_allocation")
++STATUSES = ("ignored", "malformed", "overflow", "negative_id", "self_loop", "valid")
++DEFAULT_MAX_WEDGES = 50_000_000
++TIE_POLICY = "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved"
++
++
++def utc_now() -> str:
++    return datetime.now(timezone.utc).isoformat()
++
++
++def write_json(path: Path, value: Any) -> None:
++    path.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
++
++
++def validate_run_id(value: str) -> str:
++    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,62}", value):
++        raise ValueError("run-id must be 1-63 ASCII letters/digits/underscores/hyphens, starting with a letter or digit")
++    return value
++
++
++def local_path(value: str) -> Path:
++    if "://" in value or value.startswith(("\\\\", "//")):
++        raise ValueError("output/event-log directories must be local filesystem paths; remote atomic publication is not implemented")
++    return Path(value).expanduser().resolve()
++
++
++def enforce_wedge_budget(theoretical_wedges: int, max_wedges: int) -> None:
++    if max_wedges < 1:
++        raise ValueError("max-wedges must be positive")
++    if theoretical_wedges > max_wedges:
++        raise ValueError(
++            f"Wedge budget exceeded: theoretical_wedges={theoretical_wedges:,}, max_wedges={max_wedges:,}. "
++            "The exact self-join was not started. Use a smaller graph or explicitly raise --max-wedges after checking resources."
++        )
++
++
++def prepare_run(output: Path, run_id: str) -> tuple[Path, Path, Path]:
++    """Acquire a same-run lock and create an owned, retryable staging directory."""
++    validate_run_id(run_id)
++    output = output.resolve()
++    staging = output / ".staging" / run_id
++    final = output / "runs" / run_id
++    lock = output / ".locks" / (run_id + ".lock")
++    lock.parent.mkdir(parents=True, exist_ok=True)
++    final.parent.mkdir(parents=True, exist_ok=True)
++    if final.exists():
++        raise FileExistsError(f"Run already published and cannot be overwritten: {final}")
++    descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
++    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
++        json.dump({"pid": os.getpid(), "created_at": utc_now(), "run_id": run_id}, handle)
++    owner = {"run_id": run_id, "output": str(output)}
++    try:
++        if staging.exists():
++            marker = staging / "_RUN_OWNER.json"
++            if staging.is_symlink() or not marker.is_file() or json.loads(marker.read_text(encoding="utf-8")) != owner:
++                raise RuntimeError(f"Refusing to remove an unowned staging directory: {staging}")
++            resolved = staging.resolve()
++            expected_parent = (output / ".staging").resolve()
++            if resolved.parent != expected_parent or resolved.name != run_id:
++                raise RuntimeError("Staging path escaped the run root")
++            shutil.rmtree(resolved)
++        staging.mkdir(parents=True)
++        write_json(staging / "_RUN_OWNER.json", owner)
++    except BaseException:
++        lock.unlink(missing_ok=True)
++        raise
++    return staging, final, lock
++
++
++def publish_run(staging: Path, final: Path, manifest: dict[str, Any]) -> None:
++    if final.exists():
++        raise FileExistsError(f"Run already exists: {final}")
++    write_json(staging / "manifest.json", manifest)
++    (staging / "_SUCCESS").write_text("", encoding="utf-8")
++    # Both directories are below the same local output root / filesystem.
++    os.replace(staging, final)
++
++
++def parse_edge_lines(lines: Any) -> Any:
++    """Classify every raw row without Python UDFs; signed 64-bit, nonnegative IDs."""
++    from pyspark.sql import functions as F
++
++    normalized = F.regexp_replace(F.regexp_replace(F.col("value"), "^\ufeff", ""), r"^\s+|\s+$", "")
++    parsed = lines.select(F.col("value").alias("raw_line"), normalized.alias("line"))
++    parsed = parsed.withColumn("tokens", F.split("line", r"\s+"))
++    parsed = parsed.withColumn("left_token", F.expr("try_element_at(tokens, 1)")).withColumn("right_token", F.expr("try_element_at(tokens, 2)"))
++    # try_cast remains safe with ANSI mode enabled and handles arbitrarily long integers.
++    parsed = parsed.withColumn("raw_left", F.expr("try_cast(left_token AS BIGINT)"))
++    parsed = parsed.withColumn("raw_right", F.expr("try_cast(right_token AS BIGINT)"))
++    integer_syntax = F.col("left_token").rlike(r"^[+-]?[0-9]+$") & F.col("right_token").rlike(r"^[+-]?[0-9]+$")
++    status = (
++        F.when((F.length("line") == 0) | F.col("line").startswith("#"), F.lit("ignored"))
++        .when((F.size("tokens") != 2) | ~F.coalesce(integer_syntax, F.lit(False)), F.lit("malformed"))
++        .when(F.col("raw_left").isNull() | F.col("raw_right").isNull(), F.lit("overflow"))
++        .when((F.col("raw_left") < 0) | (F.col("raw_right") < 0), F.lit("negative_id"))
++        .when(F.col("raw_left") == F.col("raw_right"), F.lit("self_loop"))
++        .otherwise(F.lit("valid"))
++    )
++    return parsed.withColumn("status", status).select("raw_line", "raw_left", "raw_right", "status")
++
++
++def canonical_edges(parsed: Any) -> Any:
++    from pyspark.sql import functions as F
++
++    return parsed.where(F.col("status") == "valid").select(
++        F.least("raw_left", "raw_right").alias("left"),
++        F.greatest("raw_left", "raw_right").alias("right"),
++    ).dropDuplicates(["left", "right"])
++
++
++def graph_tables(edges: Any) -> tuple[Any, Any]:
++    from pyspark.sql import functions as F
++
++    directed = edges.select(F.col("left").alias("src"), F.col("right").alias("dst")).unionByName(
++        edges.select(F.col("right").alias("src"), F.col("left").alias("dst"))
++    )
++    degrees = directed.groupBy("src").agg(F.count("dst").alias("degree"))
++    return directed, degrees
++
++
++def score_candidates(edges: Any, directed: Any, degrees: Any, mode: str = "baseline", partitions: int = 4) -> Any:
++    """Exact CN/RA/AA/Jaccard on non-edge two-hop pairs, with no degree cap.
++
++    Baseline aggregates all wedges before removing existing edges.  Optimized
++    removes existing pairs earlier, then aggregates bridge-hash buckets before
++    the final pair aggregate.  Spark already performs partial aggregation for
++    baseline: this experiment is not a guaranteed speedup or a hub-join fix.
++    """
++    from pyspark.sql import functions as F
++
++    if mode not in {"baseline", "optimized"} or partitions < 1:
++        raise ValueError("mode must be baseline/optimized and partitions positive")
++    left = directed.select(F.col("src").alias("bridge"), F.col("dst").alias("left")).alias("a")
++    right = directed.select(F.col("src").alias("bridge"), F.col("dst").alias("right")).alias("b")
++    wedges = left.join(right, (F.col("a.bridge") == F.col("b.bridge")) & (F.col("a.left") < F.col("b.right")), "inner").select(
++        F.col("a.bridge").alias("bridge"), F.col("a.left").alias("left"), F.col("b.right").alias("right")
++    )
++    if mode == "optimized":
++        wedges = wedges.join(edges, ["left", "right"], "left_anti")
++    weighted = wedges.join(degrees.select(F.col("src").alias("bridge"), "degree"), "bridge").select(
++        "left", "right", "bridge", (F.lit(1.0) / F.col("degree")).alias("ra"),
++        F.when(F.col("degree") > 1, F.lit(1.0) / F.log("degree")).otherwise(F.lit(0.0)).alias("aa"),
++    )
++    if mode == "optimized":
++        partial = weighted.withColumn("bridge_bucket", F.pmod(F.xxhash64("bridge"), F.lit(partitions))).groupBy(
++            "left", "right", "bridge_bucket"
++        ).agg(F.count(F.lit(1)).alias("cn"), F.sum("ra").alias("ra"), F.sum("aa").alias("aa"))
++        scored = partial.groupBy("left", "right").agg(
++            F.sum("cn").cast("long").alias("common_neighbors"),
++            F.sum("ra").alias("resource_allocation"), F.sum("aa").alias("adamic_adar"),
++        )
++    else:
++        scored = weighted.groupBy("left", "right").agg(
++            F.count(F.lit(1)).alias("common_neighbors"),
++            F.sum("ra").alias("resource_allocation"), F.sum("aa").alias("adamic_adar"),
++        ).join(edges, ["left", "right"], "left_anti")
++    left_degrees = degrees.select(F.col("src").alias("left"), F.col("degree").alias("left_degree"))
++    right_degrees = degrees.select(F.col("src").alias("right"), F.col("degree").alias("right_degree"))
++    return scored.join(left_degrees, "left").join(right_degrees, "right").withColumn(
++        "jaccard", F.col("common_neighbors") / (F.col("left_degree") + F.col("right_degree") - F.col("common_neighbors"))
++    ).select("left", "right", "common_neighbors", "resource_allocation", "adamic_adar", "jaccard")
++
++
++def topk_recommendations(scores: Any, k: int) -> Any:
++    from pyspark.sql import Window, functions as F
++
++    if k < 1:
++        raise ValueError("k must be positive")
++    forward = scores.select(F.col("left").alias("user"), F.col("right").alias("candidate"), *METHODS)
++    backward = scores.select(F.col("right").alias("user"), F.col("left").alias("candidate"), *METHODS)
++    methods = F.array(*[F.struct(F.lit(method).alias("method"), F.col(method).cast("double").alias("score")) for method in METHODS])
++    long_scores = forward.unionByName(backward).select("user", "candidate", F.explode(methods).alias("metric")).select(
++        "user", "candidate", "metric.method", "metric.score"
++    )
++    # Different aggregation trees can change the last floating-point bits. Use
++    # a documented comparison precision and keep the unrounded score for audit.
++    long_scores = long_scores.withColumn("ranking_score", F.bround("score", 12))
++    window = Window.partitionBy("user", "method").orderBy(F.col("ranking_score").desc(), F.col("candidate").asc())
++    return long_scores.withColumn("rank", F.row_number().over(window)).where(F.col("rank") <= k)
++
++
++class TableWriter:
++    def __init__(self, spark: Any, args: argparse.Namespace, staging: Path, final: Path):
++        self.spark, self.args, self.staging, self.final = spark, args, staging, final
++        self.tables: dict[str, Any] = {}
++        digest = hashlib.sha256((str(final.parent.resolve()) + ":" + args.run_id).encode()).hexdigest()[:12]
++        self.prefix = "run_" + re.sub(r"[^a-z0-9_]", "_", args.run_id.lower()) + "_" + digest
++
++    def write(self, name: str, frame: Any) -> None:
++        started = time.perf_counter()
++        if self.args.format == "parquet":
++            destination = self.staging / "tables" / name
++            frame.write.mode("errorifexists").parquet(destination.as_uri())
++            record = {"format": "parquet", "relative_path": "tables/" + name, "path": (self.final / "tables" / name).as_uri()}
++        else:
++            identifier = f"local.{self.args.namespace}.{self.prefix}_{name}"
++            frame.writeTo(identifier).using("iceberg").createOrReplace()
++            snapshot = self.spark.sql(f"SELECT snapshot_id, committed_at FROM {identifier}.snapshots ORDER BY committed_at DESC LIMIT 1").first()
++            record = {"format": "iceberg", "table": identifier, "snapshot_id": int(snapshot["snapshot_id"]), "committed_at": str(snapshot["committed_at"])}
++        record["write_seconds"] = time.perf_counter() - started
++        self.tables[name] = record
++        write_json(self.staging / "table_progress.json", self.tables)
++
++
++def build_spark(args: argparse.Namespace, event_dir: Path) -> Any:
++    from pyspark.sql import SparkSession
++
++    builder = SparkSession.builder.appName(f"friend-recommendation-{args.run_id}").master(args.master)
++    settings = {
++        "spark.sql.shuffle.partitions": str(args.partitions),
++        "spark.sql.adaptive.enabled": "true",
++        "spark.sql.adaptive.skewJoin.enabled": "true",
++        "spark.eventLog.enabled": "true",
++        "spark.eventLog.dir": event_dir.as_uri(),
++        "spark.eventLog.compress": "false",
++        "spark.eventLog.rolling.enabled": "false",
++    }
++    if args.format == "iceberg":
++        settings.update({
++            "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
++            "spark.sql.catalog.local": "org.apache.iceberg.spark.SparkCatalog",
++            "spark.sql.catalog.local.type": "hadoop",
++            "spark.sql.catalog.local.warehouse": args.warehouse,
++        })
++        if args.iceberg_package:
++            settings["spark.jars.packages"] = args.iceberg_package
++    for key, value in settings.items():
++        builder = builder.config(key, value)
++    return builder.getOrCreate()
++
++
++def execute_pipeline(spark: Any, args: argparse.Namespace, staging: Path, final: Path, event_dir: Path) -> dict[str, Any]:
++    from pyspark import StorageLevel
++    from pyspark.sql import functions as F
++
++    started = time.perf_counter()
++    timings: dict[str, float] = {}
++    writer = TableWriter(spark, args, staging, final)
++    cached = []
++
++    def persist(frame: Any) -> Any:
++        frame.persist(StorageLevel.MEMORY_AND_DISK)
++        cached.append(frame)
++        return frame
++
++    try:
++        if args.format == "iceberg":
++            spark.sql(f"CREATE NAMESPACE IF NOT EXISTS local.{args.namespace}")
++        phase = time.perf_counter()
++        spark.sparkContext.setJobGroup("clean", "Read, classify, deduplicate and build graph tables")
++        parsed = persist(parse_edge_lines(spark.read.text(args.input)))
++        counts = parsed.agg(*[F.sum(F.when(F.col("status") == status, 1).otherwise(0)).alias(status) for status in STATUSES], F.count(F.lit(1)).alias("input_rows")).first().asDict()
++        counts = {key: int(value or 0) for key, value in counts.items()}
++        edges = persist(canonical_edges(parsed))
++        edge_count = edges.count()
++        if edge_count == 0:
++            raise ValueError("Input contains no valid, non-self edges")
++        directed, degrees = graph_tables(edges)
++        directed, degrees = persist(directed), persist(degrees)
++        directed_count = directed.count()
++        degree_summary = degrees.agg(
++            F.count(F.lit(1)).alias("nodes"), F.max("degree").alias("max_degree"),
++            F.sum((F.col("degree").cast("decimal(38,0)") * (F.col("degree") - 1) / 2).cast("decimal(38,0)")).alias("wedges"),
++        ).first()
++        quality = {
++            "input_rows": counts["input_rows"], "classification_counts": {status: counts[status] for status in STATUSES},
++            "duplicate_valid_rows": counts["valid"] - edge_count,
++            "clean_edges": edge_count, "nodes": int(degree_summary["nodes"]),
++            "directed_edges": directed_count, "max_degree": int(degree_summary["max_degree"]),
++            "theoretical_wedges": int(degree_summary["wedges"] or 0),
++            "quarantined_rows": sum(counts[status] for status in ("malformed", "overflow", "negative_id", "self_loop")),
++            "input_accounting_passed": sum(counts[status] for status in STATUSES) == counts["input_rows"],
++            "adjacency_count_passed": directed_count == edge_count * 2,
++            "id_policy": "exactly two signed-integer tokens; IDs must fit signed int64 and be nonnegative; self-loops rejected; blank/#comment rows ignored",
++            "wedge_budget": {"max_wedges": args.max_wedges, "passed": int(degree_summary["wedges"] or 0) <= args.max_wedges},
++        }
++        # Persist diagnostics before refusing a graph that would explode at the
++        # self-join. Raising the limit is an explicit operator decision.
++        write_json(staging / "quality.json", quality)
++        enforce_wedge_budget(quality["theoretical_wedges"], args.max_wedges)
++        if not quality["input_accounting_passed"] or not quality["adjacency_count_passed"]:
++            raise AssertionError("Input/adjacency accounting failed")
++        for name, frame in (("clean_edges", edges), ("quarantine", parsed.where(~F.col("status").isin("valid", "ignored"))), ("adjacency", directed), ("degree", degrees)):
++            writer.write(name, frame)
++        timings["clean_materialize_and_write_seconds"] = time.perf_counter() - phase
++        write_json(staging / "quality.json", quality)
++        if args.fail_after == "clean":
++            raise RuntimeError("Injected failure after clean; this run is unpublished and retryable")
++
++        phase = time.perf_counter()
++        spark.sparkContext.setJobGroup("score", f"Exact candidate scoring ({args.mode})")
++        scores = persist(score_candidates(edges, directed, degrees, args.mode, args.partitions))
++        score_count = scores.count()
++        (staging / "score_plan.txt").write_text(scores._jdf.queryExecution().toString(), encoding="utf-8")
++        writer.write("candidate_scores", scores)
++        timings["score_materialize_and_write_seconds"] = time.perf_counter() - phase
++        quality["candidate_pairs"] = score_count
++        write_json(staging / "quality.json", quality)
++        if args.fail_after == "score":
++            raise RuntimeError("Injected failure after score; this run is unpublished and retryable")
++
++        phase = time.perf_counter()
++        spark.sparkContext.setJobGroup("topk", "Per-user, per-method stable Top-K")
++        recommendations = persist(topk_recommendations(scores, args.k))
++        recommendation_count = recommendations.count()
++        writer.write("recommendations", recommendations)
++        timings["topk_materialize_and_write_seconds"] = time.perf_counter() - phase
++
++        phase = time.perf_counter()
++        spark.sparkContext.setJobGroup("validate", "Validate result invariants")
++        existing_candidates = scores.join(edges, ["left", "right"], "inner").limit(1).count()
++        invalid_scores = scores.where(
++            (F.col("left") >= F.col("right")) | (F.col("common_neighbors") < 1)
++            | (F.col("resource_allocation") <= 0) | (F.col("adamic_adar") <= 0)
++            | (F.col("jaccard") <= 0) | (F.col("jaccard") > 1)
++            | F.isnan("resource_allocation") | F.isnan("adamic_adar") | F.isnan("jaccard")
++        ).limit(1).count()
++        checks = {
++            "no_existing_edges_in_candidates": existing_candidates == 0,
++            "candidate_score_invariants": invalid_scores == 0,
++            "recommendation_row_upper_bound": recommendation_count <= quality["nodes"] * args.k * len(METHODS),
++        }
++        quality.update({"recommendation_rows": recommendation_count, "result_checks": checks})
++        if not all(checks.values()):
++            raise AssertionError(f"Result invariants failed: {checks}")
++        timings["validation_seconds"] = time.perf_counter() - phase
++        timings["pipeline_seconds"] = time.perf_counter() - started
++        write_json(staging / "quality.json", quality)
++        write_json(staging / "timings.json", timings)
++        java = spark.sparkContext._jvm.java.lang.System
++        environment = {
++            "python": sys.version, "platform": platform.platform(), "spark": spark.version,
++            "java_version": java.getProperty("java.version"), "java_vendor": java.getProperty("java.vendor"),
++            "application_id": spark.sparkContext.applicationId, "master": spark.sparkContext.master,
++            "default_parallelism": spark.sparkContext.defaultParallelism,
++            "shuffle_partitions": args.partitions, "adaptive_enabled": spark.conf.get("spark.sql.adaptive.enabled"),
++            "storage_level": "MEMORY_AND_DISK", "iceberg_package": args.iceberg_package if args.format == "iceberg" else None,
++        }
++        write_json(staging / "environment.json", environment)
++        return {
++            "schema_version": 1, "status": "success", "run_id": args.run_id,
++            "completed_at": utc_now(), "input": args.input, "mode": args.mode, "k": args.k,
++            "max_wedges": args.max_wedges, "tie_policy": TIE_POLICY,
++            "format": args.format, "tables": writer.tables, "quality": quality, "timings": timings,
++            "environment": environment, "event_log_directory": str(event_dir),
++            "publication": {"type": "local_atomic_directory_rename", "manifest_is_visibility_boundary": True,
++                "iceberg_cross_table_transaction": False, "successful_run_is_immutable": True},
++            "limits": [
++                "Exact self-join enumerates O(sum(degree^2)) wedges; extreme-degree hubs can still exhaust resources.",
++                "Optimized mode is a measurable hypothesis; baseline already benefits from Spark partial aggregation.",
++                "No speedup, cluster scalability, online recommendation benefit or temporal accuracy is asserted by this run.",
++                "An OS-killed process can leave a lock; verify the PID is no longer running before manually removing its .locks file.",
++            ],
++        }
++    finally:
++        for frame in reversed(cached):
++            frame.unpersist(blocking=False)
++        # SparkContext has no clearJobGroup() method in the pinned PySpark API.
++        for key in ("spark.jobGroup.id", "spark.job.description", "spark.job.interruptOnCancel"):
++            spark.sparkContext.setLocalProperty(key, None)
++
++
++def argument_parser() -> argparse.ArgumentParser:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--input", required=True, help="Spark-readable txt/txt.gz path, directory or glob")
++    parser.add_argument("--output", required=True, help="Local output root; successful runs appear under runs/<run-id>")
++    parser.add_argument("--run-id", required=True)
++    parser.add_argument("--master", default="local[2]")
++    parser.add_argument("--partitions", type=int, default=4)
++    parser.add_argument("--k", type=int, default=10)
++    parser.add_argument("--max-wedges", type=int, default=DEFAULT_MAX_WEDGES, help="Preflight exact self-join budget; explicitly increase only after checking resources")
++    parser.add_argument("--mode", choices=("baseline", "optimized"), default="baseline",
++                        help="baseline is the measured lower-shuffle default; optimized is an experimental comparison")
++    parser.add_argument("--format", choices=("parquet", "iceberg"), default="parquet")
++    parser.add_argument("--event-log-dir", help="Local directory; defaults to <output>/event-logs")
++    parser.add_argument("--warehouse", help="Iceberg HadoopCatalog warehouse URI; defaults to local <output>/warehouse")
++    parser.add_argument("--namespace", default="friend_recommendation")
++    parser.add_argument("--iceberg-package", default=ICEBERG_PACKAGE, help="Maven coordinate, or empty string for a preinstalled runtime JAR")
++    parser.add_argument("--fail-after", choices=("clean", "score"), help="Deliberately fail before publication, to demonstrate retry")
++    return parser
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argument_parser()
++    args = parser.parse_args(argv)
++    if args.partitions < 1 or args.k < 1 or args.max_wedges < 1:
++        parser.error("partitions, k and max-wedges must be positive")
++    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.namespace):
++        parser.error("namespace must be one SQL identifier (letters, digits, underscores)")
++    output = local_path(args.output)
++    event_dir = local_path(args.event_log_dir) if args.event_log_dir else output / "event-logs"
++    args.warehouse = args.warehouse or (output / "warehouse").as_uri()
++    event_dir.mkdir(parents=True, exist_ok=True)
++    staging, final, lock = prepare_run(output, args.run_id)
++    spark = None
++    started = time.perf_counter()
++    try:
++        startup = time.perf_counter()
++        spark = build_spark(args, event_dir)
++        spark.sparkContext.setLogLevel("WARN")
++        startup_seconds = time.perf_counter() - startup
++        manifest = execute_pipeline(spark, args, staging, final, event_dir)
++        spark.stop()  # Finalize event log and release local file handles before publish.
++        spark = None
++        manifest["timings"]["spark_startup_seconds"] = startup_seconds
++        manifest["timings"]["end_to_end_seconds"] = time.perf_counter() - started
++        write_json(staging / "timings.json", manifest["timings"])
++        publish_run(staging, final, manifest)
++        print(json.dumps({"status": "success", "run_id": args.run_id, "manifest": str(final / "manifest.json")}, ensure_ascii=False))
++        return 0
++    except BaseException as exc:
++        if staging.exists():
++            write_json(staging / "failure.json", {"run_id": args.run_id, "status": "failed_unpublished", "failed_at": utc_now(), "error_type": type(exc).__name__, "error": str(exc)})
++        raise
++    finally:
++        try:
++            if spark is not None:
++                spark.stop()
++        finally:
++            lock.unlink(missing_ok=True)
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+--- original/tests/test_eventlog_metrics.py
++++ v2/tests/test_eventlog_metrics.py
+@@ -0,0 +1,197 @@
++"""Hand-authored Spark event fixtures; these tests do not require Spark."""
++
++from pathlib import Path
++import gzip
++import json
++import subprocess
++import sys
++
++import pytest
++
++sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
++from eventlog_metrics import summarize_event_logs
++
++
++def write_events(path, events):
++    path.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
++    return path
++
++
++def task(task_id, partition, *, stage=0, stage_attempt=0, attempt=0,
++         reason="Success", duration=10, read=10, write=20, speculative=False):
++    return {
++        "Event": "SparkListenerTaskEnd", "Stage ID": stage,
++        "Stage Attempt ID": stage_attempt, "Task End Reason": {"Reason": reason},
++        "Task Info": {"Task ID": task_id, "Index": partition, "Attempt": attempt,
++                      "Launch Time": 100, "Finish Time": 100 + duration,
++                      "Speculative": speculative},
++        "Task Metrics": {"Executor Run Time": 8, "Executor CPU Time": 5_000_000,
++                         "JVM GC Time": 1, "Memory Bytes Spilled": 3,
++                         "Disk Bytes Spilled": 2,
++                         "Shuffle Read Metrics": {"Remote Bytes Read": read,
++                                                  "Local Bytes Read": 5,
++                                                  "Remote Bytes Read To Disk": 4,
++                                                  "Total Records Read": 2},
++                         "Shuffle Write Metrics": {"Shuffle Bytes Written": write,
++                                                   "Shuffle Write Time": 1_000_000,
++                                                   "Shuffle Records Written": 3}},
++    }
++
++
++def completed(stage=0, attempt=0, failure=None):
++    return {"Event": "SparkListenerStageCompleted", "Stage Info": {
++        "Stage ID": stage, "Stage Attempt ID": attempt, "Number of Tasks": 2,
++        "Stage Name": "test", "Completion Time": 300, "Failure Reason": failure,
++    }}
++
++
++def test_real_resource_totals_include_failed_and_speculative_attempts_but_logical_totals_do_not(tmp_path):
++    events = [
++        {"Event": "SparkListenerApplicationStart", "App ID": "app-test", "App Name": "test"},
++        {"Event": "SparkListenerJobStart", "Job ID": 0, "Stage IDs": [0], "Submission Time": 1},
++        task(0, 0, reason="ExceptionFailure", duration=5, read=2, write=3),
++        task(1, 0, attempt=1, duration=20),
++        task(2, 0, attempt=1, duration=30, speculative=True),
++        task(3, 1, duration=40), completed(),
++        {"Event": "SparkListenerJobEnd", "Job ID": 0,
++         "Job Result": {"Result": "JobSucceeded"}, "Completion Time": 400},
++        {"Event": "SparkListenerApplicationEnd", "Timestamp": 500},
++    ]
++    result = summarize_event_logs(write_events(tmp_path / "eventlog", events))
++    summary = result["summary"]
++    assert summary["task_outcome_counts"] == {"failed": 1, "success": 3}
++    assert summary["all_attempts"]["task_attempt_count"] == 4
++    assert summary["all_attempts"]["shuffle_read_bytes"] == 52  # (2+5) + 3*(10+5)
++    assert summary["all_attempts"]["shuffle_write_bytes"] == 63
++    assert summary["all_attempts"]["executor_cpu_time_ns"] == 20_000_000
++    assert summary["all_attempts"]["disk_spill_bytes"] == 8
++    assert summary["by_task_outcome"]["failed"]["shuffle_write_bytes"] == 3
++    assert summary["logical_successful_tasks"]["task_attempt_count"] == 2
++    assert summary["logical_successful_tasks"]["shuffle_write_bytes"] == 40
++    assert summary["all_attempts"]["successful_task_duration_ms"]["p50"] == 30
++    assert summary["all_attempts"]["successful_task_duration_ms"]["p95"] == 39
++    assert summary["logical_successful_tasks"]["successful_task_duration_ms"]["p50"] == 30
++    assert result["jobs"][0]["status"] == "success"
++    assert result["stage_attempts"][0]["by_task_outcome"]["failed"]["task_attempt_count"] == 1
++    assert result["warnings"] == []
++
++
++def test_repeated_stage_uses_latest_success_per_partition_and_retains_reused_outputs(tmp_path):
++    events = [task(0, 0, write=100), task(1, 1, reason="FetchFailed", write=10),
++              completed(failure="fetch failure"),
++              task(2, 1, stage_attempt=1, write=200), completed(attempt=1)]
++    result = summarize_event_logs(write_events(tmp_path / "log", events))
++    assert result["summary"]["stage_attempt_counts"] == {"failed": 1, "success": 1}
++    assert result["summary"]["all_attempts"]["shuffle_write_bytes"] == 310
++    assert result["summary"]["logical_successful_tasks"]["shuffle_write_bytes"] == 300
++
++
++def test_recomputed_partition_replaces_old_success_in_logical_totals(tmp_path):
++    events = [task(0, 0, write=100), completed(failure="lost executor"),
++              task(1, 0, stage_attempt=1, write=200), completed(attempt=1)]
++    result = summarize_event_logs(write_events(tmp_path / "log", events))
++    assert result["summary"]["all_attempts"]["shuffle_write_bytes"] == 300
++    assert result["summary"]["logical_successful_tasks"]["shuffle_write_bytes"] == 200
++
++
++def test_rolling_logs_ignore_exact_duplicate_events_and_sort_segments_numerically(tmp_path):
++    event = task(0, 0)
++    write_events(tmp_path / "events_10_app", [event, completed()])
++    write_events(tmp_path / "events_2_app", [event])
++    (tmp_path / "appstatus_app").write_text("not an event", encoding="utf-8")
++    result = summarize_event_logs(tmp_path)
++    assert Path(result["input_files"][0]).name == "events_2_app"
++    assert result["duplicate_task_end_events_ignored"] == 1
++    assert result["summary"]["all_attempts"]["task_attempt_count"] == 1
++
++
++def test_conflicting_duplicate_task_end_is_not_silently_accepted(tmp_path):
++    with pytest.raises(ValueError, match="Conflicting"):
++        summarize_event_logs(write_events(tmp_path / "log", [task(0, 0), task(0, 0, write=99)]))
++
++
++def test_failed_job_and_stage_have_separate_status_and_no_committed_logical_totals(tmp_path):
++    events = [{"Event": "SparkListenerJobStart", "Job ID": 1, "Stage IDs": [0]},
++              task(0, 0, reason="TaskKilled"), completed(failure="cancelled"),
++              {"Event": "SparkListenerJobEnd", "Job ID": 1, "Job Result": {"Result": "JobFailed"}}]
++    result = summarize_event_logs(write_events(tmp_path / "log", events))
++    assert result["jobs"][0]["status"] == "failed"
++    assert result["stage_attempts"][0]["status"] == "failed"
++    assert result["summary"]["killed_task_attempts"] == 1
++    assert result["summary"]["failed_task_attempts"] == 0
++    assert result["summary"]["logical_successful_tasks"]["task_attempt_count"] == 0
++    assert result["summary"]["all_attempts"]["successful_task_duration_ms"]["p50"] is None
++
++
++def test_shared_stage_job_totals_are_not_summed_into_application_total(tmp_path):
++    events = [{"Event": "SparkListenerJobStart", "Job ID": job, "Stage IDs": [0]} for job in (1, 2)]
++    events += [task(0, 0), completed()]
++    result = summarize_event_logs(write_events(tmp_path / "log", events))
++    assert sum(job["all_attempts"]["shuffle_write_bytes"] for job in result["jobs"]) == 40
++    assert result["summary"]["all_attempts"]["shuffle_write_bytes"] == 20
++
++
++def test_group_resources_use_execution_stage_properties_not_shared_job_references(tmp_path):
++    events = [
++        {"Event": "SparkListenerJobStart", "Job ID": 1, "Stage IDs": [0],
++         "Properties": {"spark.jobGroup.id": "clean"}},
++        {"Event": "SparkListenerStageSubmitted", "Stage Info": {
++            "Stage ID": 0, "Stage Attempt ID": 0, "Submission Time": 50},
++         "Properties": {"spark.jobGroup.id": "clean"}},
++        task(0, 0, write=100), completed(),
++        {"Event": "SparkListenerJobStart", "Job ID": 2, "Stage IDs": [0, 1],
++         "Properties": {"spark.jobGroup.id": "score"}},
++        {"Event": "SparkListenerStageSubmitted", "Stage Info": {
++            "Stage ID": 1, "Stage Attempt ID": 0, "Submission Time": 400},
++         "Properties": {"spark.jobGroup.id": "score"}},
++        task(1, 0, stage=1, write=200), completed(stage=1),
++    ]
++    report = summarize_event_logs(write_events(tmp_path / "log", events))
++    groups = {entry["job_group_id"]: entry for entry in report["job_groups"]}
++    assert groups["clean"]["all_attempts"]["shuffle_write_bytes"] == 100
++    assert groups["score"]["all_attempts"]["shuffle_write_bytes"] == 200
++    assert sum(group["all_attempts"]["shuffle_write_bytes"] for group in groups.values()) == 300
++    assert report["jobs"][1]["all_attempts"]["shuffle_write_bytes"] == 300
++    assert report["stage_attempts"][0]["job_group_source"] == "StageSubmitted.Properties"
++
++
++def test_group_fallback_is_unambiguous_or_unassigned(tmp_path):
++    events = [{"Event": "SparkListenerJobStart", "Job ID": job, "Stage IDs": [0],
++               "Properties": {"spark.jobGroup.id": group}} for job, group in [(1, "clean"), (2, "score")]]
++    events += [task(0, 0), completed()]
++    report = summarize_event_logs(write_events(tmp_path / "log", events))
++    assert report["job_groups"][0]["job_group_id"] is None
++    events[1]["Properties"]["spark.jobGroup.id"] = "clean"
++    report = summarize_event_logs(write_events(tmp_path / "log", events))
++    assert report["job_groups"][0]["job_group_id"] == "clean"
++
++
++def test_gzip_magic_detection_and_cli_write(tmp_path):
++    event_file = tmp_path / "eventlog.compressed"
++    with gzip.open(event_file, "wt", encoding="utf-8") as stream:
++        stream.write(json.dumps(task(0, 0)) + "\n" + json.dumps(completed()) + "\n")
++    output = tmp_path / "out" / "metrics.json"
++    project = Path(__file__).parents[1]
++    run = subprocess.run([sys.executable, "-m", "src.eventlog_metrics", "--input", str(event_file),
++                          "--output", str(output)], cwd=project, capture_output=True, text=True)
++    assert run.returncode == 0, run.stderr
++    assert json.loads(output.read_text(encoding="utf-8"))["summary"]["all_attempts"]["shuffle_write_bytes"] == 20
++
++
++def test_missing_metrics_and_incomplete_logs_report_limits(tmp_path):
++    event = task(0, 0)
++    del event["Task Metrics"]
++    result = summarize_event_logs(write_events(tmp_path / "log", [event]))
++    assert not result["application_end_observed"]
++    assert result["summary"]["tasks_missing_metrics"] == 1
++    assert len(result["warnings"]) == 2
++
++
++def test_multiple_applications_and_invalid_json_are_rejected(tmp_path):
++    events = [{"Event": "SparkListenerApplicationStart", "App ID": app} for app in ("one", "two")]
++    with pytest.raises(ValueError, match="multiple Spark applications"):
++        summarize_event_logs(write_events(tmp_path / "log", events))
++    malformed = tmp_path / "malformed"
++    malformed.write_text('{"Event":', encoding="utf-8")
++    with pytest.raises(ValueError, match="invalid JSON event"):
++        summarize_event_logs(malformed)
+--- original/tests/test_experiment.py
++++ v2/tests/test_experiment.py
+@@ -1,9 +1,16 @@
+ from pathlib import Path
+ import sys
++import itertools
++import math
++
++import pytest
+ 
+ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
+ 
+-from experiment import adjacency, auc_score, split_edges
++from experiment import (
++    adjacency, auc_score, average_precision, load_edges, ranking_metrics,
++    sample_hard_negative_edges, sample_negative_edges, shuffle_statistics, split_edges,
++)
+ 
+ 
+ def test_split_preserves_connectivity_and_has_no_overlap() -> None:
+@@ -23,3 +30,93 @@
+ 
+ def test_auc_handles_ties() -> None:
+     assert auc_score([1, 1, 0, 0], [2.0, 1.0, 1.0, 0.0]) == 0.875
++
++
++def test_threshold_ap_for_constant_predictions_is_prevalence_and_order_invariant() -> None:
++    for labels in set(itertools.permutations([1, 1, 0, 0, 0])):
++        assert average_precision(list(labels), [0.3] * 5) == pytest.approx(0.4)
++
++
++def test_threshold_ap_matches_hand_computed_precision_recall_steps() -> None:
++    # At score 0.9: recall=1/2, precision=1/2; at 0.2: recall=1,
++    # precision=2/3. AP = (1/2)*(1/2) + (1/2)*(2/3) = 7/12.
++    assert average_precision([1, 0, 1], [0.9, 0.9, 0.2]) == pytest.approx(7 / 12)
++    assert average_precision([1, 1], [0.0, 0.0]) == 1.0
++    assert average_precision([0, 0], [1.0, 0.0]) == 0.0
++
++
++@pytest.mark.parametrize("metric", [auc_score, average_precision])
++@pytest.mark.parametrize("labels,scores", [([], []), ([1], [1.0, 2.0]),
++                                        ([2, 0], [1.0, 0.0]),
++                                        ([1, 0], [math.nan, 0.0]),
++                                        ([1, 0], [math.inf, 0.0])])
++def test_metrics_reject_undefined_or_malformed_inputs(metric, labels, scores) -> None:
++    with pytest.raises(ValueError):
++        metric(labels, scores)
++
++
++def test_auc_requires_both_classes() -> None:
++    with pytest.raises(ValueError, match="positive and one negative"):
++        auc_score([1, 1], [0.2, 0.1])
++
++
++def test_dense_graph_negative_sampling_returns_complement_and_rejects_impossible_count() -> None:
++    nodes = set(range(30))
++    complement = {(0, 29), (4, 17)}
++    edges = set(itertools.combinations(sorted(nodes), 2)) - complement
++    assert set(sample_negative_edges(nodes, edges, 2, seed=7)) == complement
++    with pytest.raises(ValueError, match="only 2"):
++        sample_negative_edges(nodes, edges, 3, seed=7)
++    assert sample_negative_edges(set(), set(), 0, seed=7) == []
++
++
++def test_negative_sampling_normalizes_undirected_edges() -> None:
++    assert sample_negative_edges({-3, -1, 5}, {(-1, -3), (5, -1)}, 1, 1) == [(-3, 5)]
++
++
++def test_hard_negatives_support_arbitrary_integer_ids_and_clear_capacity_errors() -> None:
++    graph = adjacency({-3, -1, 5}, [(-3, -1), (-1, 5)])
++    assert sample_hard_negative_edges(graph, {(-1, -3), (5, -1)}, 1, 1) == [(-3, 5)]
++    with pytest.raises(ValueError, match="only 1"):
++        sample_hard_negative_edges(graph, {(-3, -1), (-1, 5)}, 2, 1)
++
++
++def test_connected_split_rejects_unachievable_holdout_and_normalizes_edges() -> None:
++    with pytest.raises(ValueError, match="at most 0"):
++        split_edges({0, 1, 2}, [(0, 1), (1, 2)], 1, 0.5)
++    with pytest.raises(ValueError, match="empty graph"):
++        split_edges(set(), [], 1, 0.1)
++    train, test = split_edges({0, 1, 2}, [(1, 0), (0, 1), (2, 1), (2, 0)], 1, 0.34)
++    assert len(train) == 2 and len(test) == 1
++    assert all(left < right for left, right in train + test)
++
++
++@pytest.mark.parametrize("fraction", [0, 1, -0.1, math.nan])
++def test_split_validates_fraction(fraction) -> None:
++    with pytest.raises(ValueError, match="strictly between"):
++        split_edges({0, 1, 2}, [(0, 1), (1, 2), (0, 2)], 1, fraction)
++
++
++def test_ranking_requires_held_out_edges_and_positive_k() -> None:
++    graph = adjacency({0, 1, 2}, [(0, 1), (1, 2)])
++    with pytest.raises(ValueError, match="held-out"):
++        ranking_metrics(graph, [], 1)
++    with pytest.raises(ValueError, match="positive integer"):
++        ranking_metrics(graph, [(0, 2)], 0)
++    with pytest.raises(ValueError, match="non-edges"):
++        ranking_metrics(graph, [(0, 1)], 1)
++
++
++def test_empty_wedge_simulation_is_finite() -> None:
++    assert shuffle_statistics({})["record_reduction"] == 0.0
++    with pytest.raises(ValueError, match="positive integer"):
++        shuffle_statistics({}, 0)
++
++
++def test_edge_reader_has_line_diagnostics_and_accepts_indented_comments(tmp_path) -> None:
++    data = tmp_path / "edges.txt"
++    data.write_text("  # header\n4 1\n1 4\n2 2\n", encoding="utf-8")
++    assert load_edges(data) == ({1, 4}, [(1, 4)])
++    data.write_text("1 2\nbad\n", encoding="utf-8")
++    with pytest.raises(ValueError, match=r"edges.txt:2:"):
++        load_edges(data)
+--- original/tests/test_spark_pipeline.py
++++ v2/tests/test_spark_pipeline.py
+@@ -0,0 +1,188 @@
++"""DataFrame integration checks plus dependency-free publication checks.
++
++Set RUN_SPARK_TESTS=1 to enable tests that start one local Spark session.  This
++keeps correctness/publication unit tests usable before Java/Spark are installed.
++"""
++
++from __future__ import annotations
++
++import importlib.util
++import inspect
++from decimal import Decimal, ROUND_HALF_EVEN
++import json
++import math
++import os
++from pathlib import Path
++import sys
++
++import pytest
++
++sys.path.insert(0, str(Path(__file__).parents[1]))
++
++from src.spark_pipeline import (
++    argument_parser,
++    canonical_edges,
++    enforce_wedge_budget,
++    graph_tables,
++    parse_edge_lines,
++    prepare_run,
++    publish_run,
++    score_candidates,
++    topk_recommendations,
++    validate_run_id,
++)
++
++
++def test_default_mode_uses_measured_lower_shuffle_baseline():
++    args = argument_parser().parse_args([
++        "--input", "edges.txt", "--output", "artifacts/test", "--run-id", "default-choice",
++    ])
++    assert args.mode == "baseline"
++    assert inspect.signature(score_candidates).parameters["mode"].default == "baseline"
++
++
++@pytest.fixture(scope="module")
++def spark():
++    if os.environ.get("RUN_SPARK_TESTS") != "1":
++        pytest.skip("Set RUN_SPARK_TESTS=1 to start local Spark integration tests")
++    if importlib.util.find_spec("pyspark") is None:
++        pytest.skip("Install requirements-spark.txt first")
++    from pyspark.sql import SparkSession
++
++    session = SparkSession.builder.master("local[2]").appName("friend-recommendation-tests").config(
++        "spark.sql.shuffle.partitions", "2"
++    ).config("spark.ui.enabled", "false").config("spark.sql.ansi.enabled", "true").getOrCreate()
++    session.sparkContext.setLogLevel("WARN")
++    yield session
++    session.stop()
++
++
++def test_retry_replaces_only_owned_staging_and_success_is_immutable(tmp_path):
++    staging, final, lock = prepare_run(tmp_path, "retry_1")
++    (staging / "failure.json").write_text("failed", encoding="utf-8")
++    lock.unlink()  # Same cleanup performed by main() after an injected failure.
++    retry_staging, retry_final, retry_lock = prepare_run(tmp_path, "retry_1")
++    assert retry_staging == staging and retry_final == final
++    assert not (retry_staging / "failure.json").exists()
++    publish_run(retry_staging, retry_final, {"run_id": "retry_1", "status": "success"})
++    retry_lock.unlink()
++    assert not staging.exists()
++    assert (final / "_SUCCESS").exists()
++    assert json.loads((final / "manifest.json").read_text(encoding="utf-8"))["status"] == "success"
++    with pytest.raises(FileExistsError):
++        prepare_run(tmp_path, "retry_1")
++
++
++def test_unowned_staging_and_concurrent_run_are_protected(tmp_path):
++    staging = tmp_path / ".staging" / "unsafe"
++    staging.mkdir(parents=True)
++    (staging / "keep.txt").write_text("keep", encoding="utf-8")
++    with pytest.raises(RuntimeError, match="unowned"):
++        prepare_run(tmp_path, "unsafe")
++    assert (staging / "keep.txt").exists()
++    _, _, lock = prepare_run(tmp_path, "active")
++    try:
++        with pytest.raises(FileExistsError):
++            prepare_run(tmp_path, "active")
++    finally:
++        lock.unlink()
++
++
++@pytest.mark.parametrize("value", ["../x", "a/b", "a\\b", "", "x" * 64, "中文", "."])
++def test_run_id_cannot_escape_output(value):
++    with pytest.raises(ValueError):
++        validate_run_id(value)
++
++
++def test_wedge_budget_refuses_before_expansion():
++    enforce_wedge_budget(50_000_000, 50_000_000)
++    with pytest.raises(ValueError, match="theoretical_wedges=50,000,001, max_wedges=50,000,000"):
++        enforce_wedge_budget(50_000_001, 50_000_000)
++
++
++def test_dirty_input_classification_and_canonicalization(spark):
++    values = [
++        "", "  # comment", "0 1", "1 0", "\t+0002\t3\t", "2 2", "-1 4",
++        "oops", "2 word", "1 2 3", "9223372036854775808 2", "9" * 100 + " 2",
++        "9223372036854775807 0",
++    ]
++    parsed = parse_edge_lines(spark.createDataFrame([(value,) for value in values], ["value"]))
++    counts = {row.status: row["count"] for row in parsed.groupBy("status").count().collect()}
++    assert counts == {"ignored": 2, "valid": 4, "self_loop": 1, "negative_id": 1, "malformed": 3, "overflow": 2}
++    edges = {tuple(row) for row in canonical_edges(parsed).collect()}
++    assert edges == {(0, 1), (2, 3), (0, 9223372036854775807)}
++
++
++def python_reference(edges):
++    graph = {}
++    for left, right in edges:
++        graph.setdefault(left, set()).add(right)
++        graph.setdefault(right, set()).add(left)
++    result = {}
++    for left in graph:
++        for right in graph:
++            if left >= right or right in graph[left]:
++                continue
++            common = graph[left] & graph[right]
++            if not common:
++                continue
++            result[(left, right)] = {
++                "common_neighbors": len(common),
++                "resource_allocation": sum(1 / len(graph[bridge]) for bridge in common),
++                "adamic_adar": sum(1 / math.log(len(graph[bridge])) for bridge in common),
++                "jaccard": len(common) / len(graph[left] | graph[right]),
++            }
++    return result
++
++
++@pytest.mark.parametrize("mode", ["baseline", "optimized"])
++def test_distributed_scores_and_topk_match_independent_reference(spark, mode):
++    # Includes triangles (existing-edge exclusion), two bridges, and an isolated
++    # component. The reference computes set intersections, not Spark's wedge join.
++    raw_edges = [(0, 1), (0, 2), (1, 2), (1, 3), (2, 3), (3, 4), (4, 5), (10, 11)]
++    edges = spark.createDataFrame(raw_edges, "left long, right long")
++    directed, degree = graph_tables(edges)
++    scores = score_candidates(edges, directed, degree, mode=mode, partitions=2)
++    expected = python_reference(raw_edges)
++    actual = {(row.left, row.right): row.asDict() for row in scores.collect()}
++    assert actual.keys() == expected.keys()
++    for pair, metrics in expected.items():
++        for method, value in metrics.items():
++            assert actual[pair][method] == pytest.approx(value, abs=1e-12)
++    topk = topk_recommendations(scores, k=2)
++    actual_ranks = {(row.user, row.method, row.rank): row.candidate for row in topk.collect()}
++    expected_ranks = {}
++    for user in sorted({node for edge in raw_edges for node in edge}):
++        for method in ("common_neighbors", "jaccard", "adamic_adar", "resource_allocation"):
++            candidates = []
++            for (left, right), metrics in expected.items():
++                if user == left:
++                    candidates.append((right, metrics[method]))
++                elif user == right:
++                    candidates.append((left, metrics[method]))
++            rank_key = lambda item: (-Decimal(str(item[1])).quantize(Decimal("1e-12"), rounding=ROUND_HALF_EVEN), item[0])
++            for rank, (candidate, _) in enumerate(sorted(candidates, key=rank_key)[:2], 1):
++                expected_ranks[(user, method, rank)] = candidate
++    assert actual_ranks == expected_ranks
++
++
++def test_float_aggregation_noise_does_not_change_tie_order(spark):
++    scores = spark.createDataFrame(
++        [(0, 2, 1, 0.50000000000001, 0.70000000000001, 0.20000000000001),
++         (0, 3, 1, 0.50000000000002, 0.70000000000002, 0.20000000000002)],
++        "left long, right long, common_neighbors long, resource_allocation double, adamic_adar double, jaccard double",
++    )
++    rows = topk_recommendations(scores, k=1).where("user = 0").collect()
++    assert len(rows) == 4
++    assert all(row.candidate == 2 for row in rows)
++    ra = next(row for row in rows if row.method == "resource_allocation")
++    assert ra.score == 0.50000000000001
++    assert ra.ranking_score == 0.5
++
++
++def test_empty_candidate_graph(spark):
++    edges = spark.createDataFrame([(0, 1), (1, 2), (0, 2)], "left long, right long")
++    directed, degrees = graph_tables(edges)
++    scores = score_candidates(edges, directed, degrees)
++    assert scores.count() == 0
++    assert topk_recommendations(scores, k=10).count() == 0
+--- original/VALIDATION.md
++++ v2/VALIDATION.md
+@@ -1,22 +1,44 @@
+-# Validation Report
++# V2 验证范围与复现协议
+ 
+-## Overall Assessment: Ready to share with caveats
++本文件说明应验证什么，以及各类证据能支撑哪些表述。本轮实际运行的命令、环境、数据规模和结果统一记录在 IMPLEMENTATION_REPORT_zh.md；此处不预填集群成功、全图处理或加速成绩。
+ 
+-## Methodology Review
++## 已执行的基础检查
+ 
+-数据节点数和边数与Stanford SNAP官方统计一致。测试边在训练邻接表构建前移除；生成树边受到保护，因此每个训练图保持连通。负边从完整图非边中抽取，不会把真实边错误标成负例。
++指标与事件日志两个测试文件共 38 项通过。另对 486 组含大量并列分数的数据，将 AP、AUC 与 sklearn 独立比对，误差均小于 1e-12。该检查验证指标计算，不验证 Spark 集群能力。
+ 
+-## Calculation Spot-Checks
++AP 采用按同分阈值分组的非插值定义：各阈值的召回增量乘对应精确率再求和。常数预测的 AP 应等于正例比例，不随输入正负例先后顺序改变。ROC AUC 使用平均秩处理同分。空输入、长度不符、非二元标签、非有限分数及 AUC 单类别均明确拒绝。
+ 
+-- 数据规模：4,039个节点、88,234条去重无向边，已与官方页面核对。
+-- 划分互斥：测试边不出现在训练边中。
+-- 连通性：测试覆盖的每个训练图均由受保护生成树保证连通。
+-- AUC：使用平均秩处理并列分数，单元测试覆盖并列情况。
+-- 多随机种子：结果文件包含5个种子×4种方法，共20行。
+-- 结论一致性：Resource Allocation在困难AUC、AP、Precision@10、Recall@10、NDCG@10和HitRate@10上均排名第一。
++负采样检查可用非边数量；稠密图在有界拒绝采样后使用回退方法，不会无限循环。连接保护划分必须确实有可隐藏边，不能悄悄少取测试集。静态隐藏边恢复仍不能视为未来边预测。
+ 
+-## Required Caveats
++## Spark 正确性与发布协议
+ 
+-- SNAP图没有时间戳，隐藏边恢复不等价于真实未来好友预测。
+-- Combiner结果是四分区中间记录量模拟，不是实际Spark/Hadoop墙钟时间。
+-- 原简历中的“73%+”不能继续使用；本次可复算结果为70.7%。
++验收时保留 manifest、quality、environment、timings、执行计划和原始 eventlog，至少检查：
++
++1. 正反边及重复输入最终只保留一条标准无向边；注释/空行与各类坏行分类总量等于输入行数。
++2. 邻接行数等于清洗边数的两倍；节点度数与小图手算一致。
++3. 候选不含自环或已有边；四种分数与独立 Python 参考计算一致；两种模式的候选集合一致、浮点分数在声明容差内一致。
++4. 每用户每方法最多 K 条，使用已声明的 12 位 HALF_EVEN 排序分数及候选 ID 确定并列顺序。
++5. 成功后 manifest 与 _SUCCESS 同时可见，成功 run-id 拒绝覆盖；失败后只有暂存结果可见，同 run-id 可重跑且不会发布失败半成品。
++6. 超出楔形预算时在候选自连接前失败，并保留质量诊断。精确二跳算法的高阶节点开销仍然存在。
++7. Iceberg 模式记录实际 snapshot_id，按 manifest 中表标识读取验证；不将单表快照承诺解释成跨表事务。
++
++本地原子发布依赖暂存与最终目录位于同一本地文件系统；没有实现对象存储/HDFS 的同等发布协议。被操作系统强杀后可能留下锁，需先确认持锁进程已退出。
++
++## 事件日志指标口径
++
++日志测试覆盖成功、失败、被取消、stage 重试、task 重试、推测执行、相同 TaskEnd 重复、共享 stage、gzip、rolling 顺序和 CLI。
++
++- all_attempts：同一 stage ID、stage attempt ID、task ID 只计一次；失败、取消和多余推测任务的资源消耗也计入。
++- logical_successful_tasks：每个已成功完成的 stage ID、分区，取不晚于最后成功 stage attempt 的最新成功结果；同 stage attempt 内取最早成功完成的 task。它是逻辑结果的观测近似，不是实际节省字节数。
++- job：按该 job 引用的 stage ID 归属；共享 stage 可出现在多个 job 下，因此不能求和当全局总量。
++- shuffle read：Remote Bytes Read 加 Local Bytes Read，不重复加已包含在远端量中的 Read To Disk。写出量不等于读取网络流量。
++- task 时长为 Finish Time 减 Launch Time；p50/p95 只对成功 task，用线性插值。CPU 和 shuffle-write time 为 ns，其余运行/GC/fetch wait 为 ms。
++- 缺少 ApplicationEnd 或 Task Metrics 时报告警告，数字只代表观测到的下界，不能解释为无成本。
++
++## 性能实验与历史边界
++
++baseline/optimized 对照必须固定输入哈希、数据实际规模、版本、CPU/内存、分区、格式及运行方式。交替运行并保留多次观测；同时报告端到端时间、阶段时间、shuffle、spill 和成功 task p95。本轮 [Facebook 事件日志对照](validation/facebook-event-comparison.json)中，score 阶段 shuffle read/write 各从 baseline 的 26,924,883 B 增至实验模式的 56,147,761 B，增加 108.53%；score 含落表为 12.376 s 对 13.052 s，未体现收益。因此 CLI、函数、本地脚本和 Compose 默认统一采用 baseline，optimized 仅显式实验启用，并有默认选择回归测试。端到端差异受 clean 阶段与缓存条件影响，不据此宣称加速。该结论只覆盖已记录的这一次输入与环境。
++
++Compose 文件是一个 master、两个 worker 和 submit 的单机容器配置；没有实测日志前不能称集群已经运行，更不能称四台物理机器或线性扩展。
++
++原 results/ 和 docs/legacy/ 属于旧实验。旧 AP 在并列内先排正例，存在乐观偏差；没有被重新运行的旧结果不能作为 V2 新成绩。原四分区 70.7% 是记录量模拟，不能换写成真实 Spark shuffle 或耗时下降。

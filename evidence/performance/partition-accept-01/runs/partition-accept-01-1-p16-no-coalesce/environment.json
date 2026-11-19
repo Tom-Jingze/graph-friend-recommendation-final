@@ -1,0 +1,24 @@
+{
+  "python": "3.8.10 (default, Mar 18 2025, 20:04:55) \n[GCC 9.4.0]",
+  "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.29",
+  "spark": "3.5.7",
+  "java_version": "11.0.27",
+  "java_vendor": "Eclipse Adoptium",
+  "application_id": "local-1795021024675",
+  "master": "local[2]",
+  "default_parallelism": 2,
+  "shuffle_partitions": 16,
+  "adaptive_enabled": "true",
+  "adaptive_coalesce_enabled": "false",
+  "adaptive_advisory_partition_size": "67108864b",
+  "adaptive_coalesce_parallelism_first": "true",
+  "adaptive_coalesce_min_partition_size": "1048576b",
+  "driver_memory": "2g",
+  "execution_control_requests": {
+    "disable_adaptive_coalesce": true,
+    "adaptive_advisory_partition_bytes": null,
+    "adaptive_coalesce_size_first": false
+  },
+  "storage_level": "MEMORY_AND_DISK",
+  "iceberg_package": null
+}

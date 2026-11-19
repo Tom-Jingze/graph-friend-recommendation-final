@@ -1,0 +1,28 @@
+{
+  "application_id": "app-20261118160542-0000",
+  "master": "spark://spark-master:7077",
+  "manifest": "artifacts/cluster-validation/runs/cluster-facebook-01/manifest.json",
+  "source_eventlog": "artifacts/cluster-validation/event-logs/app-20261118160542-0000",
+  "eventlog_sha256": "f5178371eff3dbfc2d726d1eedaba871861c21e0f32524e9ce40d661741db77f",
+  "counting_policy": "Distinct (stage ID, stage attempt ID, task ID) SparkListenerTaskEnd events. Success requires Task End Reason.Reason == Success. These are actual executor tasks, not driver containers or worker registration counts.",
+  "executors": [
+    {
+      "executor_id": "0",
+      "host": "spark-worker-1",
+      "total_cores": 1,
+      "successful_task_attempts": 3,
+      "failed_task_attempts": 0
+    },
+    {
+      "executor_id": "1",
+      "host": "spark-worker-2",
+      "total_cores": 1,
+      "successful_task_attempts": 141,
+      "failed_task_attempts": 0
+    }
+  ],
+  "both_worker_executors_completed_tasks": true,
+  "successful_task_attempts_total": 144,
+  "task_attempts_total": 144,
+  "note": "Both worker executors ran tasks on one Docker host. This is not evidence of physical multi-machine scalability."
+}

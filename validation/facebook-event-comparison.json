@@ -1,0 +1,451 @@
+{
+  "scope": "One observation per mode, local[2], full Facebook graph, Parquet. No stable speedup claim.",
+  "counting_policy": "Score resources use disjoint executed StageSubmitted jobGroup attribution, not summed JobStart referenced stage totals. Pipeline timings include other phases; task p95 is a task distribution, not phase wall time.",
+  "runs": {
+    "baseline": {
+      "application_id": "local-1795017230884",
+      "event_metrics": "validation/facebook-baseline-event-metrics.json",
+      "all_attempts": {
+        "task_attempt_count": 144,
+        "shuffle_read_bytes": 49403242,
+        "shuffle_write_bytes": 49403242,
+        "shuffle_read_records": 3729478,
+        "shuffle_write_records": 3729478,
+        "memory_spill_bytes": 0,
+        "disk_spill_bytes": 0,
+        "executor_run_time_ms": 45186,
+        "executor_cpu_time_ns": 21616731012,
+        "jvm_gc_time_ms": 1510,
+        "shuffle_fetch_wait_time_ms": 0,
+        "shuffle_write_time_ns": 294332029,
+        "successful_task_duration_ms": {
+          "count": 144,
+          "p50": 105.5,
+          "p95": 1472.3499999999995,
+          "max": 2877
+        }
+      },
+      "score_group": {
+        "job_group_id": "score",
+        "job_ids": [
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27
+        ],
+        "job_counts": {
+          "success": 10
+        },
+        "stage_attempt_counts": {
+          "success": 10
+        },
+        "stage_attempts": [
+          [
+            41,
+            0
+          ],
+          [
+            42,
+            0
+          ],
+          [
+            43,
+            0
+          ],
+          [
+            44,
+            0
+          ],
+          [
+            45,
+            0
+          ],
+          [
+            47,
+            0
+          ],
+          [
+            50,
+            0
+          ],
+          [
+            53,
+            0
+          ],
+          [
+            57,
+            0
+          ],
+          [
+            60,
+            0
+          ]
+        ],
+        "observed_stage_window_ms": 8397,
+        "all_attempts": {
+          "task_attempt_count": 45,
+          "shuffle_read_bytes": 26924883,
+          "shuffle_write_bytes": 26924883,
+          "shuffle_read_records": 2377618,
+          "shuffle_write_records": 2377618,
+          "memory_spill_bytes": 0,
+          "disk_spill_bytes": 0,
+          "executor_run_time_ms": 13119,
+          "executor_cpu_time_ns": 6296520555,
+          "jvm_gc_time_ms": 515,
+          "shuffle_fetch_wait_time_ms": 0,
+          "shuffle_write_time_ns": 46157469,
+          "successful_task_duration_ms": {
+            "count": 45,
+            "p50": 92.0,
+            "p95": 1072.3999999999999,
+            "max": 1395
+          }
+        },
+        "by_task_outcome": {
+          "success": {
+            "task_attempt_count": 45,
+            "shuffle_read_bytes": 26924883,
+            "shuffle_write_bytes": 26924883,
+            "shuffle_read_records": 2377618,
+            "shuffle_write_records": 2377618,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 13119,
+            "executor_cpu_time_ns": 6296520555,
+            "jvm_gc_time_ms": 515,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 46157469,
+            "successful_task_duration_ms": {
+              "count": 45,
+              "p50": 92.0,
+              "p95": 1072.3999999999999,
+              "max": 1395
+            }
+          },
+          "failed": {
+            "task_attempt_count": 0,
+            "shuffle_read_bytes": 0,
+            "shuffle_write_bytes": 0,
+            "shuffle_read_records": 0,
+            "shuffle_write_records": 0,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 0,
+            "executor_cpu_time_ns": 0,
+            "jvm_gc_time_ms": 0,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 0,
+            "successful_task_duration_ms": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "max": null
+            }
+          },
+          "killed": {
+            "task_attempt_count": 0,
+            "shuffle_read_bytes": 0,
+            "shuffle_write_bytes": 0,
+            "shuffle_read_records": 0,
+            "shuffle_write_records": 0,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 0,
+            "executor_cpu_time_ns": 0,
+            "jvm_gc_time_ms": 0,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 0,
+            "successful_task_duration_ms": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "max": null
+            }
+          },
+          "unknown": {
+            "task_attempt_count": 0,
+            "shuffle_read_bytes": 0,
+            "shuffle_write_bytes": 0,
+            "shuffle_read_records": 0,
+            "shuffle_write_records": 0,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 0,
+            "executor_cpu_time_ns": 0,
+            "jvm_gc_time_ms": 0,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 0,
+            "successful_task_duration_ms": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "max": null
+            }
+          }
+        },
+        "logical_successful_tasks": {
+          "task_attempt_count": 45,
+          "shuffle_read_bytes": 26924883,
+          "shuffle_write_bytes": 26924883,
+          "shuffle_read_records": 2377618,
+          "shuffle_write_records": 2377618,
+          "memory_spill_bytes": 0,
+          "disk_spill_bytes": 0,
+          "executor_run_time_ms": 13119,
+          "executor_cpu_time_ns": 6296520555,
+          "jvm_gc_time_ms": 515,
+          "shuffle_fetch_wait_time_ms": 0,
+          "shuffle_write_time_ns": 46157469,
+          "successful_task_duration_ms": {
+            "count": 45,
+            "p50": 92.0,
+            "p95": 1072.3999999999999,
+            "max": 1395
+          }
+        }
+      },
+      "timings_seconds": {
+        "clean_materialize_and_write_seconds": 29.905557299000066,
+        "score_materialize_and_write_seconds": 12.37639053600003,
+        "topk_materialize_and_write_seconds": 16.80133067099996,
+        "validation_seconds": 1.4087574210000184,
+        "pipeline_seconds": 60.52981188000001,
+        "spark_startup_seconds": 2.180724091000002,
+        "end_to_end_seconds": 63.089491081000006
+      },
+      "warnings": []
+    },
+    "optimized": {
+      "application_id": "local-1795017345596",
+      "event_metrics": "validation/facebook-optimized-event-metrics.json",
+      "all_attempts": {
+        "task_attempt_count": 146,
+        "shuffle_read_bytes": 78627433,
+        "shuffle_write_bytes": 78627433,
+        "shuffle_read_records": 6210248,
+        "shuffle_write_records": 6210248,
+        "memory_spill_bytes": 0,
+        "disk_spill_bytes": 0,
+        "executor_run_time_ms": 49929,
+        "executor_cpu_time_ns": 24921832906,
+        "jvm_gc_time_ms": 1184,
+        "shuffle_fetch_wait_time_ms": 0,
+        "shuffle_write_time_ns": 249981631,
+        "successful_task_duration_ms": {
+          "count": 146,
+          "p50": 97.5,
+          "p95": 1685.0,
+          "max": 3412
+        }
+      },
+      "score_group": {
+        "job_group_id": "score",
+        "job_ids": [
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28
+        ],
+        "job_counts": {
+          "success": 11
+        },
+        "stage_attempt_counts": {
+          "success": 11
+        },
+        "stage_attempts": [
+          [
+            40,
+            0
+          ],
+          [
+            41,
+            0
+          ],
+          [
+            43,
+            0
+          ],
+          [
+            44,
+            0
+          ],
+          [
+            45,
+            0
+          ],
+          [
+            47,
+            0
+          ],
+          [
+            50,
+            0
+          ],
+          [
+            54,
+            0
+          ],
+          [
+            58,
+            0
+          ],
+          [
+            63,
+            0
+          ],
+          [
+            67,
+            0
+          ]
+        ],
+        "observed_stage_window_ms": 9818,
+        "all_attempts": {
+          "task_attempt_count": 47,
+          "shuffle_read_bytes": 56147761,
+          "shuffle_write_bytes": 56147761,
+          "shuffle_read_records": 4858388,
+          "shuffle_write_records": 4858388,
+          "memory_spill_bytes": 0,
+          "disk_spill_bytes": 0,
+          "executor_run_time_ms": 16207,
+          "executor_cpu_time_ns": 8057759139,
+          "jvm_gc_time_ms": 430,
+          "shuffle_fetch_wait_time_ms": 0,
+          "shuffle_write_time_ns": 161111442,
+          "successful_task_duration_ms": {
+            "count": 47,
+            "p50": 95.0,
+            "p95": 1544.0,
+            "max": 1715
+          }
+        },
+        "by_task_outcome": {
+          "success": {
+            "task_attempt_count": 47,
+            "shuffle_read_bytes": 56147761,
+            "shuffle_write_bytes": 56147761,
+            "shuffle_read_records": 4858388,
+            "shuffle_write_records": 4858388,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 16207,
+            "executor_cpu_time_ns": 8057759139,
+            "jvm_gc_time_ms": 430,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 161111442,
+            "successful_task_duration_ms": {
+              "count": 47,
+              "p50": 95.0,
+              "p95": 1544.0,
+              "max": 1715
+            }
+          },
+          "failed": {
+            "task_attempt_count": 0,
+            "shuffle_read_bytes": 0,
+            "shuffle_write_bytes": 0,
+            "shuffle_read_records": 0,
+            "shuffle_write_records": 0,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 0,
+            "executor_cpu_time_ns": 0,
+            "jvm_gc_time_ms": 0,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 0,
+            "successful_task_duration_ms": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "max": null
+            }
+          },
+          "killed": {
+            "task_attempt_count": 0,
+            "shuffle_read_bytes": 0,
+            "shuffle_write_bytes": 0,
+            "shuffle_read_records": 0,
+            "shuffle_write_records": 0,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 0,
+            "executor_cpu_time_ns": 0,
+            "jvm_gc_time_ms": 0,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 0,
+            "successful_task_duration_ms": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "max": null
+            }
+          },
+          "unknown": {
+            "task_attempt_count": 0,
+            "shuffle_read_bytes": 0,
+            "shuffle_write_bytes": 0,
+            "shuffle_read_records": 0,
+            "shuffle_write_records": 0,
+            "memory_spill_bytes": 0,
+            "disk_spill_bytes": 0,
+            "executor_run_time_ms": 0,
+            "executor_cpu_time_ns": 0,
+            "jvm_gc_time_ms": 0,
+            "shuffle_fetch_wait_time_ms": 0,
+            "shuffle_write_time_ns": 0,
+            "successful_task_duration_ms": {
+              "count": 0,
+              "p50": null,
+              "p95": null,
+              "max": null
+            }
+          }
+        },
+        "logical_successful_tasks": {
+          "task_attempt_count": 47,
+          "shuffle_read_bytes": 56147761,
+          "shuffle_write_bytes": 56147761,
+          "shuffle_read_records": 4858388,
+          "shuffle_write_records": 4858388,
+          "memory_spill_bytes": 0,
+          "disk_spill_bytes": 0,
+          "executor_run_time_ms": 16207,
+          "executor_cpu_time_ns": 8057759139,
+          "jvm_gc_time_ms": 430,
+          "shuffle_fetch_wait_time_ms": 0,
+          "shuffle_write_time_ns": 161111442,
+          "successful_task_duration_ms": {
+            "count": 47,
+            "p50": 95.0,
+            "p95": 1544.0,
+            "max": 1715
+          }
+        }
+      },
+      "timings_seconds": {
+        "clean_materialize_and_write_seconds": 24.21676426700003,
+        "score_materialize_and_write_seconds": 13.051998716000071,
+        "topk_materialize_and_write_seconds": 16.59294602700004,
+        "validation_seconds": 1.9526212830000986,
+        "pipeline_seconds": 55.85905628900002,
+        "spark_startup_seconds": 1.6140875300000062,
+        "end_to_end_seconds": 58.13310925600001
+      },
+      "warnings": []
+    }
+  }
+}

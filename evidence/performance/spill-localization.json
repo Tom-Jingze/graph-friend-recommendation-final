@@ -1,0 +1,128 @@
+{
+  "status": "LOCALIZED_FROM_ACTUAL_EVENTLOG",
+  "historical_run_id": "youtube-200k-01",
+  "historical_mode": "optimized",
+  "source_eventlog": "evidence/eventlogs/local-1795017437994.json.gz",
+  "compressed_sha256": "c48facf7dd4c93d4279f0457468c38eb7ff8d030b623b68268f337af4b6f68d5",
+  "uncompressed_sha256": "c579c2606c87ccdabb70f6e5c05543d4b9c806f6a38e70d308ed80ce1aaf49ad",
+  "application_id": "local-1795017437994",
+  "related_jobs": [
+    {
+      "job_id": 29,
+      "stage_ids": [
+        70,
+        71,
+        68,
+        69
+      ],
+      "job_group_id": "topk",
+      "sql_execution_id": "10"
+    }
+  ],
+  "stage_id": 71,
+  "stage_attempt_id": 0,
+  "task_count": 8,
+  "disk_spill_bytes": 317327309,
+  "memory_spill_bytes": 2415917952,
+  "tasks": [
+    {
+      "task_id": 111,
+      "partition_index": 0,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 8200,
+      "disk_spill_bytes": 38526555,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 112,
+      "partition_index": 1,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 8225,
+      "disk_spill_bytes": 38538953,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 113,
+      "partition_index": 2,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 6149,
+      "disk_spill_bytes": 38522432,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 114,
+      "partition_index": 3,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 6270,
+      "disk_spill_bytes": 38531587,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 115,
+      "partition_index": 4,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 7265,
+      "disk_spill_bytes": 40796203,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 116,
+      "partition_index": 5,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 7233,
+      "disk_spill_bytes": 40814334,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 118,
+      "partition_index": 7,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 6833,
+      "disk_spill_bytes": 40807773,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    },
+    {
+      "task_id": 117,
+      "partition_index": 6,
+      "task_type": "ShuffleMapTask",
+      "duration_ms": 6981,
+      "disk_spill_bytes": 40789472,
+      "memory_spill_bytes": 301989744,
+      "sql_spill_accumulator_2166_update": 301989744
+    }
+  ],
+  "identified_sort_operator": {
+    "node_name": "Sort",
+    "description": "Sort [user#1798L ASC NULLS FIRST, method#1861 ASC NULLS FIRST, ranking_score#1867 DESC NULLS LAST, candidate#1799L ASC NULLS FIRST], false, 0",
+    "metrics": [
+      {
+        "name": "sort time",
+        "accumulatorId": 2164,
+        "metricType": "timing"
+      },
+      {
+        "name": "peak memory",
+        "accumulatorId": 2165,
+        "metricType": "size"
+      },
+      {
+        "name": "spill size",
+        "accumulatorId": 2166,
+        "metricType": "size"
+      }
+    ]
+  },
+  "interpretation": "All 317,327,309 bytes of observed disk spill belong to the topk group, stage71 ShuffleMapTasks. SQL spill accumulator2166 matches Sort(user,method,ranking_score,candidate) after forward/backward Union and four-method Generate, before partial WindowGroupLimit/shuffle. Memory spill is an estimated pre-compression amount, not additional physical disk bytes.",
+  "experimental_hypothesis": "More score/output partitions, retained by disabling AQE coalescing, may reduce per-map sorting pressure. This is a hypothesis pending new baseline-vs-baseline runs.",
+  "limitations": [
+    "Historical source mode was optimized. Its 97.129-second end-to-end time is NOT the baseline of the V3 layout experiment.",
+    "Both new runs must use baseline, the same 200k-edge sample, image/source hashes and resource controls."
+  ]
+}

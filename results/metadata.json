@@ -1,0 +1,15 @@
+{
+  "nodes": 4039,
+  "edges": 88234,
+  "seeds": [
+    11,
+    22,
+    33,
+    44,
+    55
+  ],
+  "test_fraction": 0.1,
+  "k": 10,
+  "source": "Stanford SNAP ego-Facebook combined graph",
+  "source_url": "https://snap.stanford.edu/data/ego-Facebook.html"
+}

@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "source_mutated_after_snapshot": true,
+  "full_parity": {
+    "clean_edges": {
+      "rows": 19,
+      "key_multisets_equal": true,
+      "max_absolute_error": {}
+    },
+    "candidate_scores": {
+      "rows": 21,
+      "key_multisets_equal": true,
+      "max_absolute_error": {
+        "common_neighbors": 0,
+        "jaccard": 0.0,
+        "adamic_adar": 0.0,
+        "resource_allocation": 0.0
+      }
+    },
+    "recommendations": {
+      "rows": 168,
+      "key_multisets_equal": true,
+      "max_absolute_error": {
+        "score": 0.0
+      }
+    }
+  },
+  "independent_python": {
+    "all_pairs": 21,
+    "max_error": 2.220446049250313e-16,
+    "int64_ids_preserved": true,
+    "all_recommendation_rows": 168,
+    "independent_topk_order_passed": true
+  },
+  "mutated_request_rejected": true,
+  "original_request_idempotent": true,
+  "request": {
+    "base_manifest_sha256": "edb8f943b16f066efbf131e03701c05dd61a22dbb3dd46f245ae35f4f3dda27b",
+    "changes_sha256": "8d5ede7db11ab453f2e8e770e3d5fd35354d18dbb8a718b9ff36681ce7aa2870",
+    "k": 10,
+    "format": "parquet",
+    "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+    "algorithm": "two-hop-invalidation-v1",
+    "request_sha256": "7f82e6dd748fdbe7082ab0134ace69b1db8588f768845b91b99899dbf1fc404f"
+  },
+  "source_sha256": {
+    "src/incremental_pipeline.py": "6a9dbf684c24fa74865bc83b6ce9b4da8c4a174dec771551ad42b5dd02f6ef5f",
+    "scripts/accept_incremental.py": "632f751cd6071cde67d2939cceb8b768279a04658fc9cad2c0776bf5e77bc897",
+    "scripts/verify_frozen_batch.py": "90ee37aa6ce49946b20750192405269d6c14b1bb2eb87db554c9f3fc5145df21"
+  },
+  "environment": {
+    "spark": "3.5.7",
+    "master": "local[2]",
+    "application_id": "local-1795054897359"
+  }
+}

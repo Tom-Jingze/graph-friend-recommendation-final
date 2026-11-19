@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "status": "success",
+  "run_id": "iceberg-retry-01",
+  "completed_at": "2026-11-18T16:00:03.246695+00:00",
+  "input": "data/validation_dirty.txt",
+  "mode": "optimized",
+  "k": 10,
+  "max_wedges": 50000000,
+  "tie_policy": "ranking_score = bround(raw score, 12), HALF_EVEN; descending ranking_score, ascending candidate ID; raw score preserved",
+  "format": "iceberg",
+  "tables": {
+    "clean_edges": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_clean_edges",
+      "snapshot_id": 7119325623168026400,
+      "committed_at": "2026-11-18 15:59:38.443000",
+      "write_seconds": 5.551606555999911
+    },
+    "quarantine": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_quarantine",
+      "snapshot_id": 4720031492150807102,
+      "committed_at": "2026-11-18 15:59:41.327000",
+      "write_seconds": 2.6553265070000407
+    },
+    "adjacency": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_adjacency",
+      "snapshot_id": 8614737898308104037,
+      "committed_at": "2026-11-18 15:59:44.653000",
+      "write_seconds": 3.2305522489999703
+    },
+    "degree": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_degree",
+      "snapshot_id": 5530033298443940613,
+      "committed_at": "2026-11-18 15:59:47.289000",
+      "write_seconds": 2.855055198000059
+    },
+    "candidate_scores": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_candidate_scores",
+      "snapshot_id": 2714212603300659259,
+      "committed_at": "2026-11-18 15:59:52.952000",
+      "write_seconds": 3.5786154549999765
+    },
+    "recommendations": {
+      "format": "iceberg",
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_recommendations",
+      "snapshot_id": 9032486856625143051,
+      "committed_at": "2026-11-18 15:59:59.769000",
+      "write_seconds": 4.26398413600009
+    }
+  },
+  "quality": {
+    "input_rows": 16,
+    "classification_counts": {
+      "ignored": 2,
+      "malformed": 2,
+      "overflow": 1,
+      "negative_id": 1,
+      "self_loop": 1,
+      "valid": 9
+    },
+    "duplicate_valid_rows": 1,
+    "clean_edges": 8,
+    "nodes": 8,
+    "directed_edges": 16,
+    "max_degree": 3,
+    "theoretical_wedges": 11,
+    "quarantined_rows": 5,
+    "input_accounting_passed": true,
+    "adjacency_count_passed": true,
+    "id_policy": "exactly two signed-integer tokens; IDs must fit signed int64 and be nonnegative; self-loops rejected; blank/#comment rows ignored",
+    "wedge_budget": {
+      "max_wedges": 50000000,
+      "passed": true
+    },
+    "candidate_pairs": 4,
+    "recommendation_rows": 32,
+    "result_checks": {
+      "no_existing_edges_in_candidates": true,
+      "candidate_score_invariants": true,
+      "recommendation_row_upper_bound": true
+    }
+  },
+  "timings": {
+    "clean_materialize_and_write_seconds": 19.453574076999985,
+    "score_materialize_and_write_seconds": 6.111601850000056,
+    "topk_materialize_and_write_seconds": 6.9945188900001085,
+    "validation_seconds": 1.1442760909999379,
+    "pipeline_seconds": 35.071605359000046,
+    "spark_startup_seconds": 2.271570183999984,
+    "end_to_end_seconds": 37.71058233400004
+  },
+  "environment": {
+    "python": "3.8.10 (default, Mar 18 2025, 20:04:55) \n[GCC 9.4.0]",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.29",
+    "spark": "3.5.7",
+    "java_version": "11.0.27",
+    "java_vendor": "Eclipse Adoptium",
+    "application_id": "local-1795017567187",
+    "master": "local[2]",
+    "default_parallelism": 2,
+    "shuffle_partitions": 4,
+    "adaptive_enabled": "true",
+    "storage_level": "MEMORY_AND_DISK",
+    "iceberg_package": ""
+  },
+  "event_log_directory": "/workspace/outputs/graph-friend-recommendation-v2/artifacts/validation/event-logs",
+  "publication": {
+    "type": "local_atomic_directory_rename",
+    "manifest_is_visibility_boundary": true,
+    "iceberg_cross_table_transaction": false,
+    "successful_run_is_immutable": true
+  },
+  "limits": [
+    "Exact self-join enumerates O(sum(degree^2)) wedges; extreme-degree hubs can still exhaust resources.",
+    "Optimized mode is a measurable hypothesis; baseline already benefits from Spark partial aggregation.",
+    "No speedup, cluster scalability, online recommendation benefit or temporal accuracy is asserted by this run.",
+    "An OS-killed process can leave a lock; verify the PID is no longer running before manually removing its .locks file."
+  ]
+}

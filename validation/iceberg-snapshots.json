@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "tables": {
+    "clean_edges": {
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_clean_edges",
+      "snapshot_count": 2,
+      "manifest_snapshot": 7119325623168026400,
+      "current_rows": 8,
+      "manifest_snapshot_rows": 8,
+      "oldest_snapshot": 9001348920841382018,
+      "oldest_snapshot_rows": 8
+    },
+    "quarantine": {
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_quarantine",
+      "snapshot_count": 2,
+      "manifest_snapshot": 4720031492150807102,
+      "current_rows": 5,
+      "manifest_snapshot_rows": 5,
+      "oldest_snapshot": 8324492122747337586,
+      "oldest_snapshot_rows": 5
+    },
+    "adjacency": {
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_adjacency",
+      "snapshot_count": 2,
+      "manifest_snapshot": 8614737898308104037,
+      "current_rows": 16,
+      "manifest_snapshot_rows": 16,
+      "oldest_snapshot": 249099877098036628,
+      "oldest_snapshot_rows": 16
+    },
+    "degree": {
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_degree",
+      "snapshot_count": 2,
+      "manifest_snapshot": 5530033298443940613,
+      "current_rows": 8,
+      "manifest_snapshot_rows": 8,
+      "oldest_snapshot": 8014326842501633182,
+      "oldest_snapshot_rows": 8
+    },
+    "candidate_scores": {
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_candidate_scores",
+      "snapshot_count": 1,
+      "manifest_snapshot": 2714212603300659259,
+      "current_rows": 4,
+      "manifest_snapshot_rows": 4,
+      "oldest_snapshot": 2714212603300659259,
+      "oldest_snapshot_rows": 4
+    },
+    "recommendations": {
+      "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_recommendations",
+      "snapshot_count": 1,
+      "manifest_snapshot": 9032486856625143051,
+      "current_rows": 32,
+      "manifest_snapshot_rows": 32,
+      "oldest_snapshot": 9032486856625143051,
+      "oldest_snapshot_rows": 32
+    }
+  },
+  "scope": "Actual Iceberg snapshot metadata and VERSION AS OF SQL reads; no cross-table transaction claimed"
+}

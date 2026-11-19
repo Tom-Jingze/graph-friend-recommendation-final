@@ -1,0 +1,21 @@
+{
+  "scope": "Portable evidence for both NEW V3 baseline variants; full Parquet tables stay under artifacts for local replay.",
+  "runs": [
+    {
+      "run_id": "partition-accept-01-1-p4-default-aqe",
+      "manifest": "evidence/performance/partition-accept-01/runs/partition-accept-01-1-p4-default-aqe/manifest.json",
+      "eventlog": "evidence/performance/partition-accept-01/eventlogs/local-1795020931339.json.gz",
+      "eventlog_sha256_decompressed": "cfb816f3f29f173a92ca56ae375702bcba973979a598a1c4949a1218bde61beb",
+      "eventlog_sha256_compressed": "019abe45b8ba6048ef75dcfa8469b8bacc77b004659d6ad39cbddf7c0dd0da85",
+      "actual_docker_resource_proof": "evidence/performance/partition-accept-01/docker-resource-proof-p4.json"
+    },
+    {
+      "run_id": "partition-accept-01-1-p16-no-coalesce",
+      "manifest": "evidence/performance/partition-accept-01/runs/partition-accept-01-1-p16-no-coalesce/manifest.json",
+      "eventlog": "evidence/performance/partition-accept-01/eventlogs/local-1795021024675.json.gz",
+      "eventlog_sha256_decompressed": "6c86be5cb62a38ee32055d8d49ba704e53db67768b3128b485380bfd4e30a9e0",
+      "eventlog_sha256_compressed": "f54bfd57ab5212f653675a8293dedbd3d0ae1f10e6be947eb12aebe6abaa50cf",
+      "actual_docker_resource_proof": "evidence/performance/partition-accept-01/docker-resource-proof-p16.json"
+    }
+  ]
+}

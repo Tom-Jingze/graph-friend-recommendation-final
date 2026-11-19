@@ -1,0 +1,44 @@
+{
+  "clean_edges": {
+    "format": "iceberg",
+    "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_clean_edges",
+    "snapshot_id": 7119325623168026400,
+    "committed_at": "2026-11-18 15:59:38.443000",
+    "write_seconds": 5.551606555999911
+  },
+  "quarantine": {
+    "format": "iceberg",
+    "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_quarantine",
+    "snapshot_id": 4720031492150807102,
+    "committed_at": "2026-11-18 15:59:41.327000",
+    "write_seconds": 2.6553265070000407
+  },
+  "adjacency": {
+    "format": "iceberg",
+    "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_adjacency",
+    "snapshot_id": 8614737898308104037,
+    "committed_at": "2026-11-18 15:59:44.653000",
+    "write_seconds": 3.2305522489999703
+  },
+  "degree": {
+    "format": "iceberg",
+    "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_degree",
+    "snapshot_id": 5530033298443940613,
+    "committed_at": "2026-11-18 15:59:47.289000",
+    "write_seconds": 2.855055198000059
+  },
+  "candidate_scores": {
+    "format": "iceberg",
+    "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_candidate_scores",
+    "snapshot_id": 2714212603300659259,
+    "committed_at": "2026-11-18 15:59:52.952000",
+    "write_seconds": 3.5786154549999765
+  },
+  "recommendations": {
+    "format": "iceberg",
+    "table": "local.friend_recommendation.run_iceberg_retry_01_4851ebcfb3dd_recommendations",
+    "snapshot_id": 9032486856625143051,
+    "committed_at": "2026-11-18 15:59:59.769000",
+    "write_seconds": 4.26398413600009
+  }
+}

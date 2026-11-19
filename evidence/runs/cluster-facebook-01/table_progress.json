@@ -1,0 +1,38 @@
+{
+  "clean_edges": {
+    "format": "parquet",
+    "relative_path": "tables/clean_edges",
+    "path": "file:///app/artifacts/cluster-validation/runs/cluster-facebook-01/tables/clean_edges",
+    "write_seconds": 5.474709386999848
+  },
+  "quarantine": {
+    "format": "parquet",
+    "relative_path": "tables/quarantine",
+    "path": "file:///app/artifacts/cluster-validation/runs/cluster-facebook-01/tables/quarantine",
+    "write_seconds": 2.2181282409999312
+  },
+  "adjacency": {
+    "format": "parquet",
+    "relative_path": "tables/adjacency",
+    "path": "file:///app/artifacts/cluster-validation/runs/cluster-facebook-01/tables/adjacency",
+    "write_seconds": 11.903086756999983
+  },
+  "degree": {
+    "format": "parquet",
+    "relative_path": "tables/degree",
+    "path": "file:///app/artifacts/cluster-validation/runs/cluster-facebook-01/tables/degree",
+    "write_seconds": 5.85761560800006
+  },
+  "candidate_scores": {
+    "format": "parquet",
+    "relative_path": "tables/candidate_scores",
+    "path": "file:///app/artifacts/cluster-validation/runs/cluster-facebook-01/tables/candidate_scores",
+    "write_seconds": 8.453347427999915
+  },
+  "recommendations": {
+    "format": "parquet",
+    "relative_path": "tables/recommendations",
+    "path": "file:///app/artifacts/cluster-validation/runs/cluster-facebook-01/tables/recommendations",
+    "write_seconds": 7.306445123999993
+  }
+}
